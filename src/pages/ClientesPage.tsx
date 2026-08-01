@@ -36,6 +36,21 @@ export function ClientesPage() {
     aceitaLembreteCobranca: true,
   });
 
+  // Altura ocupada pelo teclado virtual (iOS não encolhe o viewport — o rodapé
+  // fixo ficaria escondido atrás do teclado). Usa o visualViewport para subir o rodapé.
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      setKeyboardOffset(Math.max(0, window.innerHeight - vv.height));
+    };
+    update();
+    vv.addEventListener('resize', update);
+    return () => vv.removeEventListener('resize', update);
+  }, []);
+
   const carregarClientes = async () => {
     try {
       setLoading(true);
@@ -218,7 +233,7 @@ export function ClientesPage() {
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none" style={{ paddingBottom: keyboardOffset }}>
             {/* Handle de arraste (mobile) */}
             <div className="md:hidden pt-2.5 pb-1 flex justify-center shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-300" />
