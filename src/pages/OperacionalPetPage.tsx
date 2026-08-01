@@ -644,8 +644,8 @@ export default function OperacionalPetPage() {
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 max-w-lg">
         {(['ORDENS', 'AGENDA', 'TUTORES', 'CATALOGO'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-colors ${activeTab === tab ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {tab === 'ORDENS' ? 'Ordens' : tab === 'AGENDA' ? 'Agenda' : tab === 'TUTORES' ? 'Tutores & Pets' : 'Catálogo'}
+            className={`flex-1 py-2.5 px-1.5 sm:px-4 rounded-lg text-xs sm:text-sm font-bold transition-colors ${activeTab === tab ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {tab === 'ORDENS' ? 'Ordens' : tab === 'AGENDA' ? 'Agenda' : tab === 'TUTORES' ? <><span className="hidden sm:inline">Tutores &amp; Pets</span><span className="sm:hidden">Tutores</span></> : 'Catálogo'}
           </button>
         ))}
       </div>
@@ -692,8 +692,8 @@ export default function OperacionalPetPage() {
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${STATUS_CORES[o.status] || 'bg-gray-100 text-gray-600'}`}>
                       {STATUS_OS[o.status] || o.status}
                     </span>
-                    {o.recorrente && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-brand-100 text-brand-700">Recorrente</span>}
-                    <span className="text-sm font-bold text-gray-900 shrink-0 w-20 text-right">{formatBRL(Number(o.valorFinal))}</span>
+                    {o.recorrente && <span className="hidden md:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-brand-100 text-brand-700">Recorrente</span>}
+                    <span className="text-sm font-bold text-gray-900 shrink-0 w-16 sm:w-20 text-right">{formatBRL(Number(o.valorFinal))}</span>
                   </button>
                 );
               })}
@@ -972,12 +972,12 @@ export default function OperacionalPetPage() {
                 {tutoresFiltrados.map(t => (
                   <div key={t.id}>
                     <div className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onClick={() => setTutorDetail(tutorDetail?.id === t.id ? null : t)}>
-                      <div>
-                        <p className="font-medium text-gray-900">{t.nome}</p>
-                        <p className="text-xs text-gray-400">{t.telefone} {t.email ? `• ${t.email}` : ''}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{t.nome}</p>
+                        <p className="text-xs text-gray-400 truncate">{t.telefone} {t.email ? `• ${t.email}` : ''}</p>
                         <p className="text-xs text-gray-400">{t._count?.pets || t.pets?.length || 0} pet(s)</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 ml-2">
                         <button onClick={(e) => { e.stopPropagation(); abrirEditarTutor(t); }} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Editar</button>
                         <button onClick={(e) => { e.stopPropagation(); excluirTutor(t.id); }} className="text-xs px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium">Excluir</button>
                         {t.telefone && (
@@ -1023,7 +1023,7 @@ export default function OperacionalPetPage() {
                                       {historicoPet(pet).length} visita(s) · total {formatBRL(totalGastoPet(pet))}
                                     </p>
                                   </div>
-                                  <div className="flex gap-1 shrink-0">
+                                  <div className="flex flex-wrap gap-1 shrink-0 justify-end">
                                     {!pet.adotado && (
                                       <button onClick={() => adotarPet(pet)} className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded font-medium" title="Registrar adoção e encerrar lar temporário">
                                         Adotar
@@ -1055,7 +1055,7 @@ export default function OperacionalPetPage() {
       {/* ────────────── TAB: CATÁLOGO ────────────── */}
       {activeTab === 'CATALOGO' && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-gray-100 text-gray-500">
                 <th className="p-4 font-medium text-left">Serviço</th>
@@ -1096,23 +1096,59 @@ export default function OperacionalPetPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: cards */}
+          <div className="md:hidden divide-y divide-gray-50">
+            {catalog.length === 0 && (
+              <div className="p-8 text-center">
+                <p className="text-gray-400 text-sm">Nenhum serviço no catálogo.</p>
+                <button onClick={abrirNovoCatalog} className="mt-3 text-sm font-bold text-brand-600 hover:underline">+ Cadastrar primeiro serviço</button>
+              </div>
+            )}
+            {catalog.map(c => (
+              <div key={c.id} className="p-4 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900">{c.nome}</p>
+                  {c.descricao && <p className="text-xs text-gray-400 truncate">{c.descricao}</p>}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.categoria || 'OUTRO'}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                      {c.tipoDuracao === 'DIARIA' ? 'Por Diária' : c.tipoDuracao === 'HORA' ? 'Por Hora' : c.tipoDuracao === 'FIXO' ? 'Valor Fixo' : c.tipoDuracao === 'MENSAL' ? 'Mensal' : c.tipoDuracao === 'SEMANAL' ? 'Semanal' : 'Indeterminado'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-gray-900">{formatBRL(Number(c.preco))}</p>
+                  <div className="flex items-center justify-end gap-1 mt-1.5">
+                    <button onClick={() => abrirEditarCatalog(c)} className="text-xs px-2.5 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-medium inline-flex items-center gap-1">
+                      <Pencil className="w-3 h-3" /> Editar
+                    </button>
+                    <button onClick={async () => { if (window.confirm(`Excluir "${c.nome}"?`)) { try { await fetchApi(`/pet/service-catalog/${c.id}`, { method: 'DELETE' }); toast.success('Serviço excluído!'); carregarTudo(); } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro desconhecido'); } } }}
+                      className="text-xs px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium inline-flex items-center">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* ─── MODAL TUTOR ─── */}
       {modalTutor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
             <h2 className="text-xl font-bold mb-4">{selectedTutor ? 'Editar Tutor' : 'Novo Tutor'}</h2>
             <form onSubmit={salvarTutor} className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.nome} onChange={e => setFormTutor({...formTutor, nome: e.target.value})} /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.telefone} onChange={e => setFormTutor({...formTutor, telefone: e.target.value})} /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.email} onChange={e => setFormTutor({...formTutor, email: e.target.value})} /></div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.endereco} onChange={e => setFormTutor({...formTutor, endereco: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.bairro} onChange={e => setFormTutor({...formTutor, bairro: e.target.value})} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.cidade} onChange={e => setFormTutor({...formTutor, cidade: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">CEP</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.cep} onChange={e => setFormTutor({...formTutor, cep: e.target.value})} /></div>
               </div>
@@ -1128,8 +1164,8 @@ export default function OperacionalPetPage() {
 
       {/* ─── MODAL PET ─── */}
       {modalPet && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
             <h2 className="text-xl font-bold mb-4">{selectedPet ? 'Editar Pet' : 'Novo Pet'}</h2>
             <form onSubmit={salvarPet} className="space-y-4">
               <div>
@@ -1139,7 +1175,7 @@ export default function OperacionalPetPage() {
                   {tutors.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formPet.nome} onChange={e => setFormPet({...formPet, nome: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Espécie *</label>
                   <select required className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formPet.especie} onChange={e => setFormPet({...formPet, especie: e.target.value})}>
@@ -1147,7 +1183,7 @@ export default function OperacionalPetPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Raça</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formPet.raca} onChange={e => setFormPet({...formPet, raca: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Porte</label>
                   <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formPet.porte} onChange={e => setFormPet({...formPet, porte: e.target.value})}>
@@ -1155,7 +1191,7 @@ export default function OperacionalPetPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
                   <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formPet.sexo} onChange={e => setFormPet({...formPet, sexo: e.target.value})}>
                     <option value="">Selecione...</option><option value="MACHO">Macho</option><option value="FEMEA">Fêmea</option>
@@ -1177,13 +1213,13 @@ export default function OperacionalPetPage() {
 
       {/* ─── MODAL CATÁLOGO ─── */}
       {modalCatalog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
             <h2 className="text-xl font-bold mb-4">{selectedCatalog ? 'Editar Serviço' : 'Novo Serviço'}</h2>
             <form onSubmit={salvarCatalog} className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.nome} onChange={e => setFormCatalog({...formCatalog, nome: e.target.value})} /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label><textarea rows={2} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.descricao} onChange={e => setFormCatalog({...formCatalog, descricao: e.target.value})} /></div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Preço (R$) *</label><input required type="number" step="0.01" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.preco} onChange={e => setFormCatalog({...formCatalog, preco: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
                   <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formCatalog.categoria} onChange={e => setFormCatalog({...formCatalog, categoria: e.target.value})}>
@@ -1207,8 +1243,8 @@ export default function OperacionalPetPage() {
 
       {/* ─── MODAL ORDEM DE SERVIÇO ─── */}
       {modalOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] flex flex-col animate-slide-up sm:animate-none">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h2 className="text-xl font-bold">{editingOrderId ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}</h2>
               <button type="button" onClick={() => setModalOrder(false)} className="text-gray-400 hover:text-gray-600"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -1221,7 +1257,7 @@ export default function OperacionalPetPage() {
                     {pets.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.especie}) - {p.tutor?.nome || 'Sem tutor'}</option>)}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Check-in *</label><input required type="datetime-local" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formOrder.dataEntrada} onChange={e => setFormOrder({...formOrder, dataEntrada: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label><input type="datetime-local" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formOrder.dataSaida} onChange={e => setFormOrder({...formOrder, dataSaida: e.target.value})} /></div>
                 </div>
@@ -1259,7 +1295,7 @@ export default function OperacionalPetPage() {
                 }) && !editingOrderId && (
                   <div className="bg-brand-50 border border-brand-100 rounded-lg p-3">
                     <p className="text-sm font-medium text-brand-800 mb-2">Serviço recorrente — cobrança mensal</p>
-                    <div className="flex gap-2 mb-3">
+                    <div className="flex flex-wrap gap-2 mb-3">
                       {['continuo', 'meses'].map(opcao => (
                         <button
                           key={opcao}
@@ -1274,7 +1310,7 @@ export default function OperacionalPetPage() {
                     {formOrder.recorrente ? (
                       <p className="text-xs text-gray-600">Ao concluir cada mês, o sistema gera a próxima OS automaticamente (indicada como <strong>Recorrente</strong>). Para encerrar: cancele a OS agendada do mês seguinte.</p>
                     ) : (
-                      <div className="flex items-center justify-between gap-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <p className="text-xs text-gray-600">Serão criadas ordens agendadas mensalmente (1 por mês), a partir do check-in. Cada mês você executa e recebe normalmente.</p>
                         <div className="w-24 shrink-0">
                           <label className="block text-xs font-medium text-gray-700 mb-1">Meses</label>
@@ -1284,7 +1320,7 @@ export default function OperacionalPetPage() {
                     )}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Desconto (R$)</label><input type="number" step="0.01" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formOrder.desconto} onChange={e => setFormOrder({...formOrder, desconto: e.target.value})} /></div>
                   <div className="flex items-end pb-2">
                     <p className="text-sm font-bold text-gray-900">Total: {formatBRL(valorFinal)}</p>
@@ -1307,8 +1343,8 @@ export default function OperacionalPetPage() {
       )}
       {/* ─── MODAL RECEBIMENTO ─── */}
       {receiveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <HandCoins className="w-5 h-5 text-emerald-600" /> Concluir e Receber
             </h2>
@@ -1347,8 +1383,8 @@ export default function OperacionalPetPage() {
 
       {/* ─── MODAL HISTÓRICO DO PET ─── */}
       {historyModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg p-4 sm:p-6 max-h-[92dvh] sm:max-h-[85vh] flex flex-col animate-slide-up sm:animate-none">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <div>
                 <h2 className="text-xl font-bold">{historyModal.nome}</h2>
@@ -1359,12 +1395,12 @@ export default function OperacionalPetPage() {
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-4 shrink-0">
               {([
                 ['historico', 'Histórico', History],
-                ['vacinas', 'Vacinas & Vermífugos', Syringe],
+                ['vacinas', 'Vacinas', Syringe],
                 ['peso', 'Peso', Scale],
               ] as const).map(([tab, label, Icon]) => (
                 <button key={tab} type="button" onClick={() => setFichaTab(tab)}
                   className={`flex-1 py-1.5 px-2 rounded-md text-xs font-bold transition-colors inline-flex items-center justify-center gap-1 ${fichaTab === tab ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                  <Icon className="w-3.5 h-3.5" /> {label}
+                  <Icon className="w-3.5 h-3.5" /> {label}{tab === 'vacinas' && <span className="hidden sm:inline"> &amp; Vermífugos</span>}
                 </button>
               ))}
             </div>
