@@ -228,13 +228,14 @@ export function LojasPage() {
       setFormFeaturesStoreId(firstStore.id);
       try {
         const storeData = await fetchApi('/super-admin/stores/' + firstStore.id + '/features');
-        if (storeData.features) {
+        if (storeData.features && Object.keys(storeData.features).length > 0) {
           setFormFeatures(storeData.features);
         } else {
-          setFormFeatures({});
+          // Sem features configuradas: assume todos os módulos habilitados
+          setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
         }
       } catch {
-        setFormFeatures({});
+        setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
       }
     }
   };

@@ -116,6 +116,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
+  // Mantém features/permissões atualizadas em tempo real:
+  // refaz o /auth/me ao voltar para a aba e a cada 60s,
+  // para que mudanças de features (ex.: desligar PDV) sumam do menu sem re-login.
+  useEffect(() => {
+    const refresh = () => {
+      fetchApi('/auth/me').then(data => {
+        if (data.user) setUser(data.user);
+      }).catch(() => { /* sessão indisponível — ignora */ });
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const id = setInterval(refresh, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(id);
+    };
+  }, []);
+
   const login = (userData: User) => {
     setUser(userData);
     if (userData.workspaces && userData.workspaces.length > 0) {

@@ -38,7 +38,6 @@ export const MobileBottomNav = React.memo(function MobileBottomNav({ onMenuClick
     const can = (key: string) => {
       const f = user?.features;
       if (!f) return true;
-      if (Object.keys(f).length === 0) return true;
       return !!f[key];
     };
     tabs = [
