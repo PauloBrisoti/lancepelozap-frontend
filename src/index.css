@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand Theme: Emerald Green Premium */
+  --brand-50: #ecfdf5;
+  --brand-100: #d1fae5;
+  --brand-200: #a7f3d0;
+  --brand-300: #6ee7b7;
+  --brand-400: #34d399;
+  --brand-500: #10b981;
+  --brand-600: #059669;
+  --brand-700: #047857;
+  --brand-800: #065f46;
+  --brand-900: #064e3b;
+  --brand-950: #022c22;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+.animate-fade-in-up { animation: fade-in-up 0.2s ease-out; }
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  main h1 + p {
+    display: none !important;
+  }
+  main .p-5,
+  main .p-6,
+  main .p-8 {
+    padding: 0.5rem !important;
+  }
+  main .px-5,
+  main .px-6,
+  main .px-8 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  main .py-5,
+  main .py-6 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  main .text-xl,
+  main .text-2xl {
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+  }
+  main .text-3xl {
+    font-size: 1rem !important;
+    line-height: 1.375rem !important;
+  }
+  main .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+  main .gap-6 {
+    gap: 0.75rem !important;
+  }
+  main .mb-5,
+  main .mb-6,
+  main .mb-8 {
+    margin-bottom: 0.5rem !important;
+  }
+  main .mt-8 {
+    margin-top: 0.25rem !important;
+  }
+}
