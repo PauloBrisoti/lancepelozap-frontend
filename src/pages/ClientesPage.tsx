@@ -218,98 +218,97 @@ export function ClientesPage() {
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="text-lg font-bold text-gray-900">{formulario.id ? 'Editar Cliente' : 'Novo Cliente'}</h3>
-              <button onClick={() => setModalAberto(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none">
+            {/* Handle de arraste (mobile) */}
+            <div className="md:hidden pt-2.5 pb-1 flex justify-center shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-300" />
             </div>
-            <form onSubmit={handleSalvar} className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="col-span-2 md:col-span-1">
+            {/* Cabeçalho fixo */}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+              <h3 className="text-lg font-bold text-gray-900">{formulario.id ? 'Editar Cliente' : 'Novo Cliente'}</h3>
+              <button onClick={() => setModalAberto(false)} aria-label="Fechar" className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition text-2xl leading-none">&times;</button>
+            </div>
+            {/* Formulário rolável */}
+            <form id="form-cliente" onSubmit={handleSalvar} className="p-4 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>
-                  <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" value={formulario.nomeCompleto} onChange={(e) => setFormulario({...formulario, nomeCompleto: e.target.value})} />
+                  <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" value={formulario.nomeCompleto} onChange={(e) => setFormulario({...formulario, nomeCompleto: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">CPF/CNPJ</label>
-                  <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="CPF ou CNPJ (opcional)" value={formulario.cpf || ''} onChange={(e) => setFormulario({...formulario, cpf: e.target.value})} />
+                  <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="Opcional" value={formulario.cpf || ''} onChange={(e) => setFormulario({...formulario, cpf: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Telefone / WhatsApp <span className="text-red-500">*</span></label>
-                  <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="(00) 00000-0000" value={formulario.telefoneWhatsapp || ''} onChange={(e) => setFormulario({...formulario, telefoneWhatsapp: e.target.value})} />
+                  <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="(00) 00000-0000" value={formulario.telefoneWhatsapp || ''} onChange={(e) => setFormulario({...formulario, telefoneWhatsapp: e.target.value})} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 col-span-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <input type="email" value={formulario.email} onChange={e => setFormulario({...formulario, email: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm focus:outline-none focus:ring-brand-500 focus:border-brand-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">RG</label>
-                    <input type="text" value={formulario.rg} onChange={e => setFormulario({...formulario, rg: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm focus:outline-none focus:ring-brand-500 focus:border-brand-500" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" value={formulario.email} onChange={e => setFormulario({...formulario, email: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
                 </div>
-
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">RG</label>
+                  <input type="text" value={formulario.rg} onChange={e => setFormulario({...formulario, rg: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
+                  <input type="date" value={formulario.dataNascimento} onChange={e => setFormulario({...formulario, dataNascimento: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    placeholder="00000-000"
+                    value={formulario.cep || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      let formatted = val;
+                      if (val.length > 5) formatted = val.slice(0,5) + '-' + val.slice(5,8);
+                      setFormulario({...formulario, cep: formatted});
+                      if (val.length === 8) {
+                        fetch(`https://viacep.com.br/ws/${val}/json/`)
+                          .then(res => res.json())
+                          .then(data => {
+                            if (!data.erro) {
+                              setFormulario(prev => ({
+                                ...prev,
+                                enderecoCompleto: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
+                              }));
+                            }
+                          });
+                      }
+                    }}
+                  />
+                </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Data de Nascimento</label>
-                  <input type="date" value={formulario.dataNascimento} onChange={e => setFormulario({...formulario, dataNascimento: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm focus:outline-none focus:ring-brand-500 focus:border-brand-500" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Endereço Completo</label>
+                  <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" value={formulario.enderecoCompleto || ''} onChange={(e) => setFormulario({...formulario, enderecoCompleto: e.target.value})} />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
-                  <div className="col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
-                    <input 
-                      type="text" 
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" 
-                      placeholder="00000-000"
-                      value={formulario.cep || ''} 
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '');
-                        let formatted = val;
-                        if (val.length > 5) formatted = val.slice(0,5) + '-' + val.slice(5,8);
-                        setFormulario({...formulario, cep: formatted});
-                        if (val.length === 8) {
-                          fetch(`https://viacep.com.br/ws/${val}/json/`)
-                            .then(res => res.json())
-                            .then(data => {
-                              if (!data.erro) {
-                                setFormulario(prev => ({
-                                  ...prev,
-                                  enderecoCompleto: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
-                                }));
-                              }
-                            });
-                        }
-                      }} 
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Endereço Completo</label>
-                    <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" value={formulario.enderecoCompleto || ''} onChange={(e) => setFormulario({...formulario, enderecoCompleto: e.target.value})} />
-                  </div>
-                </div>
-                
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Observações / Histórico</label>
-                  <textarea rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none" value={formulario.observacoes || ''} onChange={(e) => setFormulario({...formulario, observacoes: e.target.value})} />
+                  <textarea rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none" value={formulario.observacoes || ''} onChange={(e) => setFormulario({...formulario, observacoes: e.target.value})} />
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-1">
                 <div className="flex items-center mb-2">
-                  <input id="marketing" type="checkbox" className="w-4 h-4 text-brand-600 bg-gray-100 border-gray-300 rounded focus:ring-brand-500" checked={formulario.aceitaMarketing} onChange={(e) => setFormulario({...formulario, aceitaMarketing: e.target.checked})} />
-                  <label htmlFor="marketing" className="ml-2 text-sm font-medium text-gray-900">Aceita receber promoções e marketing no WhatsApp</label>
+                  <input id="marketing" type="checkbox" className="w-5 h-5 text-brand-600 bg-gray-100 border-gray-300 rounded focus:ring-brand-500" checked={formulario.aceitaMarketing} onChange={(e) => setFormulario({...formulario, aceitaMarketing: e.target.checked})} />
+                  <label htmlFor="marketing" className="ml-2.5 text-sm font-medium text-gray-900">Aceita promoções e marketing no WhatsApp</label>
                 </div>
                 <div className="flex items-center">
-                  <input id="lembrete" type="checkbox" className="w-4 h-4 text-brand-600 bg-gray-100 border-gray-300 rounded focus:ring-brand-500" checked={formulario.aceitaLembreteCobranca} onChange={(e) => setFormulario({...formulario, aceitaLembreteCobranca: e.target.checked})} />
-                  <label htmlFor="lembrete" className="ml-2 text-sm font-medium text-gray-900">Aceita receber lembretes de cobrança via sistema</label>
+                  <input id="lembrete" type="checkbox" className="w-5 h-5 text-brand-600 bg-gray-100 border-gray-300 rounded focus:ring-brand-500" checked={formulario.aceitaLembreteCobranca} onChange={(e) => setFormulario({...formulario, aceitaLembreteCobranca: e.target.checked})} />
+                  <label htmlFor="lembrete" className="ml-2.5 text-sm font-medium text-gray-900">Aceita lembretes de cobrança via sistema</label>
                 </div>
               </div>
-
-              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setModalAberto(false)} className="px-5 py-2.5 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Cancelar</button>
-                <button type="submit" className="px-5 py-2.5 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700 transition shadow-sm">Salvar Cliente</button>
-              </div>
             </form>
+            {/* Rodapé fixo — ações sempre visíveis */}
+            <div className="px-4 sm:px-6 pt-3 pb-3 border-t border-gray-100 bg-white shrink-0 flex justify-end gap-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
+              <button type="button" onClick={() => setModalAberto(false)} className="flex-1 sm:flex-none px-5 py-3 sm:py-2.5 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition text-base sm:text-sm">Cancelar</button>
+              <button type="submit" form="form-cliente" className="flex-1 sm:flex-none px-5 py-3 sm:py-2.5 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700 transition shadow-sm text-base sm:text-sm">Salvar Cliente</button>
+            </div>
           </div>
         </div>
       )}
