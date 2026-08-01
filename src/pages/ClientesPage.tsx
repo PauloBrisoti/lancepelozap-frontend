@@ -167,26 +167,56 @@ export function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
+      <div className="flex justify-between items-start sm:items-center gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Clientes</h1>
           <p className="text-gray-500 text-sm mt-1">Gerencie sua base de contatos e clientes.</p>
         </div>
-        <div className="flex gap-3">
-          <label className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition shadow-sm cursor-pointer flex items-center justify-center">
+        <div className="flex gap-2 sm:gap-3 flex-wrap">
+          <label className="bg-white text-gray-700 border border-gray-300 px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition shadow-sm cursor-pointer flex items-center justify-center text-sm sm:text-base">
             Importar
             <input type="file" accept=".csv, .xlsx, .pdf" className="hidden" onChange={handleImportCSV} />
           </label>
           <button 
             onClick={abrirModalNovo}
-            className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 transition shadow-sm"
+            className="bg-brand-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-brand-700 transition shadow-sm text-sm sm:text-base whitespace-nowrap"
           >
             + Novo Cliente
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Cards no mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-500 text-sm">Carregando clientes...</div>
+        ) : clientes.length > 0 ? (
+          clientes.map((cliente) => (
+            <div key={cliente.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-semibold text-gray-900 text-sm truncate">{cliente.nomeCompleto}</p>
+                {cliente.saldoDevedor && cliente.saldoDevedor > 0 ? (
+                  <span className="text-red-600 font-bold text-xs shrink-0">R$ {cliente.saldoDevedor.toFixed(2)}</span>
+                ) : null}
+              </div>
+              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                <p className="truncate"><span className="text-gray-400">WhatsApp:</span> {cliente.telefoneWhatsapp || '-'}</p>
+                <p className="truncate"><span className="text-gray-400">CPF:</span> {cliente.cpf || '-'}</p>
+                <p className="truncate"><span className="text-gray-400">Endereço:</span> {cliente.enderecoCompleto || '-'}</p>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4 text-sm font-medium">
+                <button onClick={() => handleGerarLink(cliente.id, cliente.nomeCompleto)} className="text-green-600 hover:text-green-900" title="Copiar link de acesso do portal">Link</button>
+                <button onClick={() => handleEditar(cliente)} className="text-brand-600 hover:text-brand-900">Editar</button>
+                <button onClick={() => handleExcluir(cliente.id)} className="text-red-600 hover:text-red-900">Excluir</button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-500 text-sm">Nenhum cliente cadastrado.</div>
+        )}
+      </div>
+
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
@@ -233,7 +263,7 @@ export function ClientesPage() {
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none" style={{ paddingBottom: keyboardOffset }}>
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl sheet-mobile sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none" style={{ paddingBottom: keyboardOffset }}>
             {/* Handle de arraste (mobile) */}
             <div className="md:hidden pt-2.5 pb-1 flex justify-center shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-300" />

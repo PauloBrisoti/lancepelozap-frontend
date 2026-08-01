@@ -34,6 +34,12 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Altura de tela cheia com fallback: browsers antigos não entendem dvh */
+.sheet-mobile {
+  height: 100vh;
+  height: 100dvh;
+}
+
 @media (max-width: 767px) {
   main h1 + p {
     display: none !important;
