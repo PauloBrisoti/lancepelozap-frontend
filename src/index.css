@@ -34,10 +34,18 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Altura de tela cheia com fallback: browsers antigos não entendem dvh */
+/* Altura de tela cheia com fallback: browsers antigos não entendem dvh.
+   max-height (não height) garante que o rodapé com ações nunca fique
+   cortado, mesmo quando o conteúdo é mais alto que a tela. */
 .sheet-mobile {
-  height: 100vh;
-  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+
+@media (min-width: 640px) {
+  .sheet-mobile {
+    max-height: 90vh;
+  }
 }
 
 @media (max-width: 767px) {

@@ -263,7 +263,7 @@ export function ClientesPage() {
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl sheet-mobile sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-none" style={{ paddingBottom: keyboardOffset }}>
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-2xl sheet-mobile flex flex-col overflow-hidden animate-slide-up sm:animate-none" style={{ paddingBottom: keyboardOffset }}>
             {/* Handle de arraste (mobile) */}
             <div className="md:hidden pt-2.5 pb-1 flex justify-center shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-300" />
