@@ -270,8 +270,11 @@ export function ClientesPage() {
             </div>
             {/* Cabeçalho fixo */}
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="text-lg font-bold text-gray-900">{formulario.id ? 'Editar Cliente' : 'Novo Cliente'}</h3>
-              <button onClick={() => setModalAberto(false)} aria-label="Fechar" className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition text-2xl leading-none">&times;</button>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-gray-900">{formulario.id ? 'Editar Cliente' : 'Novo Cliente'}</h3>
+                <p className="text-[10px] text-gray-400 truncate mt-0.5 debug-diag">UA:{navigator.userAgent.slice(0, 60)} | W:{window.innerWidth} H:{window.innerHeight} svh:{CSS.supports('height', '100svh') ? 1 : 0} dvh:{CSS.supports('height', '100dvh') ? 1 : 0} vv:{window.visualViewport ? window.visualViewport.height : '-'}</p>
+              </div>
+              <button onClick={() => setModalAberto(false)} aria-label="Fechar" className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition text-2xl leading-none shrink-0">&times;</button>
             </div>
             {/* Formulário rolável */}
             <form id="form-cliente" onSubmit={handleSalvar} className="p-4 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
