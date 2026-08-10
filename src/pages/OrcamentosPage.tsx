@@ -5,22 +5,14 @@ import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { SkeletonTable } from '../components/LoadingSkeleton';
+import { Modal } from '../components/Modal';
+import { Pagination } from '../components/Pagination';
+import { useModal } from '../hooks/useModal';
 import type { Quote, QuoteItem, Customer as CustType, Product as ProdType } from '../types/api';
+import { formatBRL } from '../utils/format';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../utils/domainMaps';
 
-const STATUS_LABELS: Record<string, string> = {
-  RASCUNHO: 'Rascunho', ENVIADO: 'Enviado', APROVADO: 'Aprovado',
-  CONVERTIDO: 'Convertido', CANCELADO: 'Cancelado', VENCIDO: 'Vencido',
-};
 
-const STATUS_COLORS: Record<string, string> = {
-  RASCUNHO: 'bg-gray-100 text-gray-700', ENVIADO: 'bg-blue-100 text-blue-700',
-  APROVADO: 'bg-green-100 text-green-700', CONVERTIDO: 'bg-purple-100 text-purple-700',
-  CANCELADO: 'bg-red-100 text-red-700', VENCIDO: 'bg-amber-100 text-amber-700',
-};
-
-function formatCurrency(value: number | string) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
-}
 
 interface QuoteItemForm { productId: string; nome: string; quantidade: number; precoUnitario: number; }
 
@@ -28,7 +20,7 @@ export function OrcamentosPage() {
   const { activeStoreId } = useAuth();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const modal = useModal();
   const [editingQuote, setEditingQuote] = useState<any>(null);
   const [formCustomerId, setFormCustomerId] = useState('');
   const [formItems, setFormItems] = useState<QuoteItemForm[]>([]);
@@ -61,7 +53,7 @@ export function OrcamentosPage() {
     setFormValidade('');
     loadProducts();
     loadCustomers();
-    setShowModal(true);
+    modal.openModal();
   };
 
   const openEdit = async (quote: Quote) => {
@@ -80,7 +72,7 @@ export function OrcamentosPage() {
       setFormValidade(data.validade ? format(new Date(data.validade), 'yyyy-MM-dd') : '');
       loadProducts();
       loadCustomers();
-      setShowModal(true);
+      modal.openModal();
     } catch {
       toast.error('Erro ao carregar orçamento');
     }
@@ -148,7 +140,7 @@ export function OrcamentosPage() {
         });
         toast.success('Orçamento criado!');
       }
-      setShowModal(false);
+      modal.closeModal();
       loadQuotes();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar orçamento');
@@ -163,7 +155,7 @@ export function OrcamentosPage() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      toast.success(`Status alterado para ${STATUS_LABELS[status]}`);
+      toast.success(`Status alterado para ${QUOTE_STATUS_LABELS[status]}`);
       loadQuotes();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao alterar status');
@@ -210,7 +202,7 @@ export function OrcamentosPage() {
       {/* Filtros */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <button onClick={() => { setStatusFilter(''); setPage(1); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!statusFilter ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todos</button>
-        {Object.entries(STATUS_LABELS).map(([key, label]) => (
+        {Object.entries(QUOTE_STATUS_LABELS).map(([key, label]) => (
           <button key={key} onClick={() => { setStatusFilter(key); setPage(1); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === key ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{label}</button>
         ))}
       </div>
@@ -241,10 +233,10 @@ export function OrcamentosPage() {
                   <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">#{quote.quoteNumber}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{quote.customer?.nomeCompleto || '—'}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(quote.valorTotalLiquido ?? 0)}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatBRL(quote.valorTotalLiquido ?? 0)}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[quote.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS[quote.status] || quote.status}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${QUOTE_STATUS_COLORS[quote.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {QUOTE_STATUS_LABELS[quote.status] || quote.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{format(new Date(quote.createdAt), 'dd/MM/yy')}</td>
@@ -291,98 +283,91 @@ export function OrcamentosPage() {
             </table>
           </div>
 
-          {/* Paginação */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-4">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">Anterior</button>
-              <span className="px-3 py-1.5 text-sm text-gray-500">Página {page} de {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">Próxima</button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
 
       {/* Modal de Criação/Edição */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingQuote ? `Editar Orçamento #${editingQuote.quoteNumber}` : 'Novo Orçamento'}</h2>
+      <Modal
+        open={modal.open}
+        onClose={modal.closeModal}
+        closeDisabled={saving}
+        title={editingQuote ? `Editar Orçamento #${editingQuote.quoteNumber}` : 'Novo Orçamento'}
+        size="lg"
+      >
+        {/* Cliente */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+          <select value={formCustomerId} onChange={e => setFormCustomerId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+            <option value="">Sem cliente (avulso)</option>
+            {customers?.map((c: CustType) => (
+              <option key={c.id} value={c.id}>{c.nomeCompleto}</option>
+            ))}
+          </select>
+        </div>
 
-            {/* Cliente */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-              <select value={formCustomerId} onChange={e => setFormCustomerId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
-                <option value="">Sem cliente (avulso)</option>
-                {customers?.map((c: CustType) => (
-                  <option key={c.id} value={c.id}>{c.nomeCompleto}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Itens */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium text-gray-700">Itens</label>
-                <button onClick={addItem} className="text-sm text-brand-600 hover:text-brand-700 font-medium">+ Adicionar Item</button>
+        {/* Itens */}
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-sm font-medium text-gray-700">Itens</label>
+            <button onClick={addItem} className="text-sm text-brand-600 hover:text-brand-700 font-medium">+ Adicionar Item</button>
+          </div>
+          {formItems.length === 0 && (
+            <p className="text-sm text-gray-400 py-2">Nenhum item adicionado</p>
+          )}
+          {formItems.map((item, idx) => (
+            <div key={idx} className="flex gap-2 items-start mb-2 p-2 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                  <option value="">Selecione um produto</option>
+                  {products?.map((p: ProdType) => (
+                    <option key={p.id} value={p.id}>{p.nome} — {formatBRL(p.precoVendaSugerido ?? 0)}</option>
+                  ))}
+                </select>
               </div>
-              {formItems.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">Nenhum item adicionado</p>
-              )}
-              {formItems.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-start mb-2 p-2 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                      <option value="">Selecione um produto</option>
-                      {products?.map((p: ProdType) => (
-                        <option key={p.id} value={p.id}>{p.nome} — {formatCurrency(p.precoVendaSugerido ?? 0)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="w-20">
-                    <input type="number" value={item.quantidade} onChange={e => updateItem(idx, 'quantidade', e.target.value)} min="0.001" step="1" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center" placeholder="Qtd" />
-                  </div>
-                  <div className="w-28">
-                    <input type="number" value={item.precoUnitario} onChange={e => updateItem(idx, 'precoUnitario', e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right" placeholder="Preço" />
-                  </div>
-                  <div className="w-24 text-sm font-medium text-gray-700 pt-1.5 text-right">
-                    {formatCurrency(item.quantidade * item.precoUnitario)}
-                  </div>
-                  <button onClick={() => removeItem(idx)} className="p-1.5 text-gray-400 hover:text-red-500 mt-0.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (R$)</label>
-                <input type="number" value={formDesconto} onChange={e => setFormDesconto(Number(e.target.value) || 0)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <div className="w-20">
+                <input type="number" value={item.quantidade} onChange={e => updateItem(idx, 'quantidade', e.target.value)} min="0.001" step="1" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center" placeholder="Qtd" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Validade</label>
-                <input type="date" value={formValidade} onChange={e => setFormValidade(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <div className="w-28">
+                <input type="number" value={item.precoUnitario} onChange={e => updateItem(idx, 'precoUnitario', e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right" placeholder="Preço" />
               </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-              <textarea value={formObservacoes} onChange={e => setFormObservacoes(e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-
-            <div className="text-right text-lg font-bold text-gray-900 mb-4">
-              Total: {formatCurrency(calcTotal())}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50">
-                {saving ? 'Salvando...' : editingQuote ? 'Atualizar Orçamento' : 'Criar Orçamento'}
+              <div className="w-24 text-sm font-medium text-gray-700 pt-1.5 text-right">
+                {formatBRL(item.quantidade * item.precoUnitario)}
+              </div>
+              <button onClick={() => removeItem(idx)} className="p-1.5 text-gray-400 hover:text-red-500 mt-0.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (R$)</label>
+            <input type="number" value={formDesconto} onChange={e => setFormDesconto(Number(e.target.value) || 0)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Validade</label>
+            <input type="date" value={formValidade} onChange={e => setFormValidade(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
           </div>
         </div>
-      )}
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+          <textarea value={formObservacoes} onChange={e => setFormObservacoes(e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+
+        <div className="text-right text-lg font-bold text-gray-900 mb-4">
+          Total: {formatBRL(calcTotal())}
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button onClick={() => modal.closeModal()} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50">
+            {saving ? 'Salvando...' : editingQuote ? 'Atualizar Orçamento' : 'Criar Orçamento'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

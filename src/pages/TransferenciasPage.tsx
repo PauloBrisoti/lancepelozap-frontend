@@ -1,6 +1,8 @@
 import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { fetchApi } from '../lib/api';
+import { formatDateTimeBR } from '../lib/dates';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface Store {
   id: string;
@@ -33,35 +35,30 @@ interface Transfer {
 }
 
 export function TransferenciasPage() {
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
-  const [produtos, setProdutos] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [modalAberto, setModalAberto] = useState(false);
   const [destinoId, setDestinoId] = useState('');
   const [observacao, setObservacao] = useState('');
   const [itens, setItens] = useState<{ productId: string; quantidade: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const carregarDados = async () => {
-    try {
-      const [transfersRes, storesRes, prodsRes] = await Promise.all([
-        fetchApi('/stock-transfers'),
-        fetchApi('/stores/my'),
-        fetchApi('/products'),
-      ]);
-      setTransfers(transfersRes);
-      setStores(Array.isArray(storesRes) ? storesRes : [storesRes]);
-      setProdutos(prodsRes);
-    } catch (error) {
-      toast.error('Erro ao carregar dados');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: transfers = [], isLoading, refetch } = useApiQuery<Transfer[]>(
+    ['stock-transfers'],
+    '/stock-transfers',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
-  useEffect(() => { carregarDados(); }, []);
+  const { data: storesRes } = useApiQuery<Store[] | Store>(
+    ['stores', 'my'],
+    '/stores/my',
+    { staleTime: STALE_TIMES.STATIC }
+  );
+  const stores = Array.isArray(storesRes) ? storesRes : storesRes ? [storesRes] : [];
+
+  const { data: produtos = [] } = useApiQuery<Product[]>(
+    ['products'],
+    '/products',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
   const adicionarItem = () => {
     setItens([...itens, { productId: '', quantidade: '1' }]);
@@ -93,7 +90,7 @@ export function TransferenciasPage() {
       setDestinoId('');
       setObservacao('');
       setItens([]);
-      carregarDados();
+      refetch();
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -105,7 +102,7 @@ export function TransferenciasPage() {
     try {
       await fetchApi(`/stock-transfers/${id}/send`, { method: 'POST' });
       toast.success('Transferência enviada!');
-      carregarDados();
+      refetch();
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -115,7 +112,7 @@ export function TransferenciasPage() {
     try {
       await fetchApi(`/stock-transfers/${id}/receive`, { method: 'POST' });
       toast.success('Transferência recebida!');
-      carregarDados();
+      refetch();
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -125,7 +122,7 @@ export function TransferenciasPage() {
     try {
       await fetchApi(`/stock-transfers/${id}/cancel`, { method: 'POST' });
       toast.success('Transferência cancelada');
-      carregarDados();
+      refetch();
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -141,7 +138,7 @@ export function TransferenciasPage() {
     return <span className={`text-xs px-2 py-1 rounded-full font-medium ${cores[status] || 'bg-gray-100'}`}>{status}</span>;
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Carregando...</div>;
+  if (isLoading) return <div className="p-8 text-center text-gray-500">Carregando...</div>;
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -168,7 +165,7 @@ export function TransferenciasPage() {
                       <span className="ml-2">{statusBadge(t.status)}</span>
                     </div>
                     <div className="text-sm text-gray-500 mt-1">
-                      {t.items.length} {t.items.length === 1 ? 'item' : 'itens'} • {t.user.nome} • {new Date(t.createdAt).toLocaleString('pt-BR')}
+                      {t.items.length} {t.items.length === 1 ? 'item' : 'itens'} • {t.user.nome} • {formatDateTimeBR(t.createdAt)}
                     </div>
                     {t.observacao && <div className="text-sm text-gray-400 mt-1 italic">{t.observacao}</div>}
                     <div className="flex flex-wrap gap-2 mt-2">

@@ -1,28 +1,22 @@
-import { useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
-import { fetchApi } from '../lib/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { TrendingUp, Users, DollarSign, ChartPie } from 'lucide-react';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 const CORES_PIE = ['#059669', '#f59e0b', '#ef4444', '#6b7280'];
 
 export function RelatoriosFinanceirosPage() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchApi('/super-admin/financial-reports')
-      .then(setData)
-      .catch(() => toast.error('Erro ao carregar relatórios'))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading } = useApiQuery<any>(
+    ['super-admin', 'financial-reports'],
+    '/super-admin/financial-reports',
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
 
   const formatBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-  if (loading) return <div className="p-8 text-gray-500">Carregando relatórios...</div>;
+  if (isLoading) return <div className="p-8 text-gray-500">Carregando relatórios...</div>;
   if (!data) return <div className="p-8 text-red-500">Erro ao carregar dados.</div>;
 
   return (

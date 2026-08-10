@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
 import { AlertTriangle, Phone, Mail, Eye, Ban, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
 
 interface OverdueItem {
   id: string;
@@ -19,29 +21,28 @@ interface OverdueItem {
   invoices: { mesReferencia: string; valorCobrado: number; status: string }[];
 }
 
+interface OverdueData {
+  total: number;
+  totalDevido: number;
+  inadimplentes: OverdueItem[];
+}
+
 export function InadimplentesPage() {
   const { impersonate } = useAuth();
-  const [data, setData] = useState<{ total: number; totalDevido: number; inadimplentes: OverdueItem[] } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'TODOS' | 'VENCIDO' | 'PENDENTE'>('TODOS');
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await fetchApi('/super-admin/overdue');
-      setData(res);
-    } catch { toast.error('Erro ao carregar inadimplentes'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
+  const { data, isLoading, refetch } = useApiQuery<OverdueData>(
+    ['super-admin', 'overdue'],
+    '/super-admin/overdue',
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
 
   const cancelSub = async (id: string) => {
     if (!confirm('Cancelar esta assinatura?')) return;
     try {
       await fetchApi(`/super-admin/subscriptions/${id}/cancel`, { method: 'PUT' });
       toast.success('Assinatura cancelada');
-      load();
+      refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
   };
   
@@ -52,18 +53,16 @@ export function InadimplentesPage() {
         body: JSON.stringify({ statusPagamento: 'PAGO' }),
       });
       toast.success('Assinatura marcada como paga');
-      load();
+      refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
   };
-
-  const formatBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
   const filtered = data?.inadimplentes.filter(i => filter === 'TODOS' || i.statusPagamento === filter) || [];
   const totalFiltered = filtered.reduce((acc, i) => acc + i.valorMensalidade, 0);
 
   const diasColor = (d: number) => d > 30 ? 'text-red-600' : d > 15 ? 'text-amber-600' : 'text-yellow-600';
 
-  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>;
+  if (isLoading) return <div className="p-8 text-gray-500">Carregando...</div>;
 
   return (
     <div className="space-y-6">

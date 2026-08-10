@@ -1,6 +1,8 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
+import { formatDateTimeBR } from '../lib/dates';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 
 interface CountItem {
   id: string;
@@ -26,8 +28,9 @@ export function InventarioPage() {
   const [counts, setCounts] = useState<InventoryCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [_, setCountAberto] = useState<string | null>(null);
   const [editedItems, setEditedItems] = useState<Record<string, string>>({});
+  const [scannerAberto, setScannerAberto] = useState(false);
+  const [scannerCountId, setScannerCountId] = useState<string | null>(null);
 
   const carregarDados = async () => {
     try {
@@ -47,7 +50,7 @@ export function InventarioPage() {
     try {
       const res = await fetchApi('/inventory-counts', { method: 'POST' });
       setCounts([res, ...counts]);
-      setCountAberto(res.id);
+      abrirScannerContagem(res.id);
       toast.success('Contagem criada! Registre as quantidades.');
     } catch (error) {
       toast.error((error as Error).message);
@@ -95,6 +98,29 @@ export function InventarioPage() {
     }
   };
 
+  const abrirScannerContagem = (countId: string) => {
+    setScannerCountId(countId);
+    setScannerAberto(true);
+  };
+
+  const handleCodigoScanner = async (codigo: string) => {
+    if (!scannerCountId) return;
+    try {
+      const item = await fetchApi(`/inventory-counts/${scannerCountId}/items/by-ean`, {
+        method: 'POST',
+        body: JSON.stringify({ ean: codigo }),
+      });
+      setCounts(prev => prev.map(c => c.id === scannerCountId
+        ? { ...c, items: c.items.some(i => i.productId === item.productId)
+            ? c.items.map(i => i.productId === item.productId ? { ...i, ...item } : i)
+            : [...c.items, item] }
+        : c));
+      toast.success(`${item.product.nome} — contado: ${Number(item.quantidadeContada)}`);
+    } catch (error) {
+      toast.error((error as Error).message || 'Produto não encontrado para este código');
+    }
+  };
+
   const statusBadge = (status: string) => {
     const cores: Record<string, string> = {
       ABERTO: 'bg-yellow-100 text-yellow-800',
@@ -131,10 +157,15 @@ export function InventarioPage() {
                     {statusBadge(count.status)}
                   </div>
                   <div className="text-sm text-gray-500 mt-1">
-                    {count._count.items} produtos • {count.user.nome} • {new Date(count.dataContagem).toLocaleString('pt-BR')}
+                    {count._count.items} produtos • {count.user.nome} • {formatDateTimeBR(count.dataContagem)}
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {count.status === 'ABERTO' && (
+                    <button onClick={() => abrirScannerContagem(count.id)} className="px-3 py-1.5 bg-indigo-500 text-white text-sm rounded-lg hover:bg-indigo-600 transition">
+                      📷 Escanear
+                    </button>
+                  )}
                   {count.status === 'ABERTO' && (
                     <button onClick={() => handleFinalizar(count.id)} className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition">
                       Finalizar
@@ -203,6 +234,12 @@ export function InventarioPage() {
           ))}
         </div>
       )}
+      <BarcodeScannerModal
+        aberto={scannerAberto}
+        onFechar={() => setScannerAberto(false)}
+        onCodigo={handleCodigoScanner}
+        titulo="Escaneie cada unidade — contagem incrementa"
+      />
     </div>
   );
 }

@@ -2,11 +2,17 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
 import { useStockAlerts } from '../hooks/useStockAlerts';
+import { useCrudList } from '../hooks/useCrudList';
+import { formatDateBR, formatDateTimeBR } from '../lib/dates';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { Modal } from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
 
 interface Category {
   id: string;
   nome: string;
   corHexadecimal: string;
+  aliquotaImposto: number | null;
 }
 
 interface Brand {
@@ -46,22 +52,17 @@ interface Product {
 }
 
 export function EstoquePage() {
+  const { user, activeWorkspace } = useAuth();
+  const isRestricted = !user?.isImpersonating && activeWorkspace ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role) : false;
   const { count: alertCount, products: alertProducts } = useStockAlerts();
   const [produtos, setProdutos] = useState<Product[]>([]);
-  const [categorias, setCategorias] = useState<Category[]>([]);
-  const [marcas, setMarcas] = useState<Brand[]>([]);
   const [termoBusca, setTermoBusca] = useState('');
   const [filtroEstoque, setFiltroEstoque] = useState<'COM_ESTOQUE' | 'TODOS' | 'SEM_ESTOQUE' | 'ENCOMENDA'>('COM_ESTOQUE');
   const [modalAberto, setModalAberto] = useState(false);
-  const [modalCategoriaAberto, setModalCategoriaAberto] = useState(false);
-  const [modalMarcaAberto, setModalMarcaAberto] = useState(false);
-  const [formMarca, setFormMarca] = useState({ nome: '' });
   
   const [form, setForm] = useState<{ id: string | null; nome: string; categoryId: string; brandId: string; precoCusto: string; precoVendaSugerido: string; qtdEstoqueAtual: string; estoqueMinimo: string; imageUrl: string; codigoBarrasEan?: string; codigoVisual?: string | null; descricaoVariante?: string; ncm?: string; unidade: string; pesoBruto?: string; pesoLiquido?: string; status: string; dataPedido: string; previsaoChegada: string; impostoEstimadoPercentual: string }>({ 
     id: null, nome: '', categoryId: '', brandId: '', precoCusto: '', precoVendaSugerido: '', qtdEstoqueAtual: '0', estoqueMinimo: '5', imageUrl: '', codigoBarrasEan: '', codigoVisual: '', descricaoVariante: '', ncm: '', unidade: 'UN', pesoBruto: '', pesoLiquido: '', status: 'ATIVO', dataPedido: '', previsaoChegada: '', impostoEstimadoPercentual: '' 
   });
-
-  const [formCat, setFormCat] = useState({ nome: '', corHexadecimal: '#3B82F6', aliquotaImposto: '' });
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,19 +71,39 @@ export function EstoquePage() {
   const [formEntrada, setFormEntrada] = useState<{ fornecedor: string; valorFreteTotal: string; itens: { productId: string; quantidade: string; custoFornecedor: string }[] }>({
     fornecedor: '', valorFreteTotal: '', itens: []
   });
+  const [scannerCadastroAberto, setScannerCadastroAberto] = useState(false);
+  const [scannerEntradaAberto, setScannerEntradaAberto] = useState(false);
+
+  const cats = useCrudList<Category, { nome: string; corHexadecimal: string; aliquotaImposto: string }>({
+    endpoint: '/categories',
+    loadList: () => fetchApi('/categories'),
+    createDefault: () => ({ nome: '', corHexadecimal: '#3B82F6', aliquotaImposto: '' }),
+    toForm: (c) => ({ nome: c.nome, corHexadecimal: c.corHexadecimal, aliquotaImposto: c.aliquotaImposto != null ? String(c.aliquotaImposto) : '' }),
+    messages: {
+      loadError: 'Erro de conexão ao carregar categorias.',
+      createSuccess: 'Categoria criada com sucesso!',
+      updateSuccess: 'Categoria atualizada com sucesso!',
+      deleteSuccess: 'Categoria removida com sucesso!',
+    },
+  });
+
+  const brands = useCrudList<Brand, { nome: string }>({
+    endpoint: '/brands',
+    loadList: () => fetchApi('/brands'),
+    createDefault: () => ({ nome: '' }),
+    toForm: (b) => ({ nome: b.nome }),
+    messages: {
+      loadError: 'Erro de conexão ao carregar marcas.',
+      createSuccess: 'Marca criada com sucesso!',
+      updateSuccess: 'Marca atualizada com sucesso!',
+      deleteSuccess: 'Marca removida com sucesso!',
+    },
+  });
 
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [catsRes, brandsRes, prodsRes] = await Promise.all([
-        fetchApi('/categories'),
-        fetchApi('/brands'),
-        fetchApi('/products')
-      ]);
-
-      setCategorias(catsRes);
-      setMarcas(brandsRes);
-      setProdutos(prodsRes);
+      setProdutos(await fetchApi('/products'));
     } catch (error) {
       console.error(error);
       toast.error((error as Error).message || "Erro de conexão ao carregar estoque.");
@@ -147,44 +168,6 @@ export function EstoquePage() {
     } catch (error) {
       console.error(error);
       toast.error((error as Error).message || "Erro de conexão ao salvar produto.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSalvarCategoria = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await fetchApi('/categories', {
-        method: 'POST',
-        body: JSON.stringify(formCat)
-      });
-      setModalCategoriaAberto(false);
-      setFormCat({ nome: '', corHexadecimal: '#3B82F6', aliquotaImposto: '' });
-      carregarDados();
-    } catch (error) {
-      console.error(error);
-      toast.error((error as Error).message || "Erro de conexão ao salvar categoria.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSalvarMarca = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await fetchApi('/brands', {
-        method: 'POST',
-        body: JSON.stringify(formMarca)
-      });
-      setModalMarcaAberto(false);
-      setFormMarca({ nome: '' });
-      carregarDados();
-    } catch (error) {
-      console.error(error);
-      toast.error((error as Error).message || "Erro de conexão ao salvar marca.");
     } finally {
       setSaving(false);
     }
@@ -388,7 +371,15 @@ export function EstoquePage() {
     try {
       await fetchApi('/product-entries', {
         method: 'POST',
-        body: JSON.stringify(formEntrada)
+        body: JSON.stringify({
+          fornecedor: formEntrada.fornecedor,
+          valorFreteTotal: formEntrada.valorFreteTotal ? Number(formEntrada.valorFreteTotal) : 0,
+          itens: formEntrada.itens.map(i => ({
+            productId: i.productId,
+            quantidade: Number(i.quantidade),
+            custoFornecedor: Number(i.custoFornecedor),
+          })),
+        })
       });
       toast.success('Entrada de produtos registrada com sucesso!');
       setModalEntradaAberto(false);
@@ -409,18 +400,67 @@ export function EstoquePage() {
     }));
   };
 
+  const buscarProdutoPorEan = async (ean: string) => {
+    try {
+      return await fetchApi(`/products/by-ean/${encodeURIComponent(ean)}`);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleCodigoScannerCadastro = async (codigo: string) => {
+    const produto = await buscarProdutoPorEan(codigo);
+    if (produto) {
+      toast(`Produto "${produto.nome}" já existe no catálogo — dados carregados para edição.`, { icon: 'ℹ️' });
+      setForm({
+        id: produto.id, nome: produto.nome, categoryId: produto.categoryId, brandId: produto.brandId || '',
+        precoCusto: String(produto.precoCusto || ''), precoVendaSugerido: String(produto.precoVendaSugerido || ''),
+        qtdEstoqueAtual: String(produto.qtdEstoqueAtual || 0), estoqueMinimo: String(produto.estoqueMinimo ?? 5),
+        imageUrl: produto.imageUrl || '', codigoBarrasEan: codigo, codigoVisual: produto.codigoVisual || '',
+        descricaoVariante: produto.descricaoVariante || '', ncm: produto.ncm || '', unidade: produto.unidade || 'UN',
+        pesoBruto: produto.pesoBruto !== null && produto.pesoBruto !== undefined ? String(produto.pesoBruto) : '',
+        pesoLiquido: produto.pesoLiquido !== null && produto.pesoLiquido !== undefined ? String(produto.pesoLiquido) : '',
+        status: produto.status || 'ATIVO', dataPedido: produto.dataPedido || '', previsaoChegada: produto.previsaoChegada || '',
+        impostoEstimadoPercentual: produto.impostoEstimadoPercentual !== null && produto.impostoEstimadoPercentual !== undefined ? String(produto.impostoEstimadoPercentual) : '',
+      });
+      setModalAberto(true);
+    } else {
+      toast.success('Produto não encontrado — complete o cadastro para salvá-lo.');
+      setForm({ id: null, nome: '', categoryId: '', brandId: '', precoCusto: '', precoVendaSugerido: '', qtdEstoqueAtual: '0', estoqueMinimo: '5', imageUrl: '', codigoBarrasEan: codigo, codigoVisual: '', descricaoVariante: '', ncm: '', unidade: 'UN', pesoBruto: '', pesoLiquido: '', status: 'ATIVO', dataPedido: '', previsaoChegada: '', impostoEstimadoPercentual: '' });
+      setModalAberto(true);
+    }
+  };
+
+  const handleCodigoScannerEntrada = async (codigo: string) => {
+    const produto = await buscarProdutoPorEan(codigo);
+    if (!produto) {
+      toast.error(`Nenhum produto com o código ${codigo}. Cadastre-o no catálogo primeiro.`);
+      return;
+    }
+    const jaExiste = formEntrada.itens.some(i => i.productId === produto.id);
+    if (jaExiste) {
+      toast(`"${produto.nome}" já está na entrada.`, { icon: 'ℹ️' });
+      return;
+    }
+    setFormEntrada(prev => ({
+      ...prev,
+      itens: [...prev.itens, { productId: produto.id, quantidade: '1', custoFornecedor: String(produto.precoCusto || '0') }],
+    }));
+    toast.success(`${produto.nome} adicionado à entrada.`);
+  };
+
   if (loading && produtos.length === 0) {
     return <div className="text-gray-500">Carregando catálogo...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Catálogo e Estoque</h1>
           <p className="text-gray-500 text-sm mt-1">Gerencie seus produtos e controle a pronta entrega.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <label className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition shadow-sm cursor-pointer flex items-center justify-center text-sm">
             Importar Excel/CSV
             <input type="file" accept=".csv, .xlsx" className="hidden" onChange={handleImportCSV} />
@@ -435,10 +475,10 @@ export function EstoquePage() {
           <button onClick={handleExportPDF} className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition shadow-sm flex items-center justify-center text-sm">
             Exportar PDF
           </button>
-          <button onClick={() => setModalCategoriaAberto(true)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
+          <button onClick={() => cats.openNew()} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
             Nova Categoria
           </button>
-          <button onClick={() => setModalMarcaAberto(true)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
+          <button onClick={() => brands.openNew()} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
             Nova Marca
           </button>
           <button onClick={() => setModalEntradaAberto(true)} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
@@ -550,9 +590,9 @@ export function EstoquePage() {
                   <th className="px-6 py-4 font-medium">Marca</th>
                   <th className="px-6 py-4 font-medium">Categoria</th>
                   <th className="px-6 py-4 font-medium text-center">Qtd</th>
-                  <th className="px-6 py-4 font-medium text-right">Preço Custo</th>
+                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Preço Custo</th>}
                   <th className="px-6 py-4 font-medium text-right">Preço Venda</th>
-                  <th className="px-6 py-4 font-medium text-right">Margem Lucro</th>
+                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Margem Lucro</th>}
                   <th className="px-6 py-4 font-medium text-right">Ações</th>
                 </tr>
               </thead>
@@ -596,7 +636,7 @@ export function EstoquePage() {
                       )}
                       {filtroEstoque === 'ENCOMENDA' && (
                         <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
-                          {prod.previsaoChegada ? new Date(prod.previsaoChegada).toLocaleDateString() : '-'}
+                          {prod.previsaoChegada ? formatDateBR(prod.previsaoChegada) : '-'}
                         </td>
                       )}
                       <td className="px-6 py-4">
@@ -619,14 +659,16 @@ export function EstoquePage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-500">R$ {Number(prod.precoCusto).toFixed(2)}</td>
+                      {!isRestricted && <td className="px-6 py-4 text-right text-gray-500">R$ {Number(prod.precoCusto).toFixed(2)}</td>}
                       <td className="px-6 py-4 text-right font-medium text-gray-900">R$ {Number(prod.precoVendaSugerido).toFixed(2)}</td>
-                      <td className="px-6 py-4 text-right font-medium text-green-600">
-                        {prod.precoCusto > 0 
-                          ? `${(((Number(prod.precoVendaSugerido) - Number(prod.precoCusto)) / Number(prod.precoCusto)) * 100).toFixed(1)}% `
-                          : '100% '}
-                        <span className="text-xs text-gray-500 block">(R$ {(Number(prod.precoVendaSugerido) - Number(prod.precoCusto)).toFixed(2)})</span>
-                      </td>
+                      {!isRestricted && (
+                        <td className="px-6 py-4 text-right font-medium text-green-600">
+                          {prod.precoCusto > 0 
+                            ? `${(((Number(prod.precoVendaSugerido) - Number(prod.precoCusto)) / Number(prod.precoCusto)) * 100).toFixed(1)}% `
+                            : '100% '}
+                          <span className="text-xs text-gray-500 block">(R$ {(Number(prod.precoVendaSugerido) - Number(prod.precoCusto)).toFixed(2)})</span>
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-right space-x-3">
                         <button onClick={() => abrirModalProduto(prod)} className="text-brand-600 hover:text-brand-900 font-medium">Editar</button>
                         <button onClick={() => deletarProduto(prod.id)} className="text-rose-600 hover:text-rose-900 font-medium">Excluir</button>
@@ -642,7 +684,7 @@ export function EstoquePage() {
                 <tr>
                   <th className="px-6 py-4 font-medium">Produto</th>
                   <th className="px-6 py-4 font-medium text-center">Quantidade Atual</th>
-                  <th className="px-6 py-4 font-medium text-right">Valor Investido</th>
+                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Valor Investido</th>}
                   <th className="px-6 py-4 font-medium text-right text-green-700">Valor Potencial</th>
                   <th className="px-6 py-4 font-medium text-right">Ação</th>
                 </tr>
@@ -667,7 +709,7 @@ export function EstoquePage() {
                             )}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right text-gray-500">R$ {inv.toFixed(2)}</td>
+                        {!isRestricted && <td className="px-6 py-4 text-right text-gray-500">R$ {inv.toFixed(2)}</td>}
                         <td className="px-6 py-4 text-right font-medium text-green-700">R$ {pot.toFixed(2)}</td>
                         <td className="px-6 py-4 text-right">
                           <button onClick={() => abrirModalProduto(prod)} className="text-brand-600 hover:text-brand-900 font-medium text-xs border border-brand-200 bg-brand-50 px-2 py-1 rounded">Dar Entrada</button>
@@ -679,7 +721,7 @@ export function EstoquePage() {
                 {produtosFiltrados.length > 0 && (
                   <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
                     <td className="px-6 py-4 text-gray-900" colSpan={2}>Totais em Estoque:</td>
-                    <td className="px-6 py-4 text-right text-gray-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoCusto), 0).toFixed(2)}</td>
+                    {!isRestricted && <td className="px-6 py-4 text-right text-gray-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoCusto), 0).toFixed(2)}</td>}
                     <td className="px-6 py-4 text-right text-green-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoVendaSugerido), 0).toFixed(2)}</td>
                     <td></td>
                   </tr>
@@ -693,324 +735,355 @@ export function EstoquePage() {
       </div>
 
       {/* Modal Produto */}
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{form.id ? 'Editar Produto' : 'Novo Produto'}</h2>
-            <form onSubmit={handleSalvarProduto} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
-                    value={form.nome}
-                    onChange={e => setForm({...form, nome: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Imagem (Opcional)</label>
-                  <div className="flex items-center gap-3">
-                    {form.imageUrl ? (
-                      <img src={form.imageUrl} alt="Preview" className="w-10 h-10 rounded object-cover border border-gray-200" />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400 border border-gray-200">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L28 20M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </div>
-                    )}
-                    <label className="cursor-pointer text-sm text-brand-600 font-medium hover:text-brand-800 bg-brand-50 px-3 py-2 rounded border border-brand-200">
-                      Escolher Foto
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                    </label>
-                    {form.imageUrl && (
-                      <button type="button" onClick={() => setForm({...form, imageUrl: ''})} className="text-red-500 hover:text-red-700 text-sm font-medium">
-                        Remover
-                      </button>
-                    )}
+      <Modal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        title={form.id ? 'Editar Produto' : 'Novo Produto'}
+        size="md"
+        rounded="xl" maxHeight="85vh"
+      >
+        <form onSubmit={handleSalvarProduto} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
+              <input 
+                type="text" 
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
+                value={form.nome}
+                onChange={e => setForm({...form, nome: e.target.value})}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Imagem (Opcional)</label>
+              <div className="flex items-center gap-3">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="Preview" className="w-10 h-10 rounded object-cover border border-gray-200" />
+                ) : (
+                  <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400 border border-gray-200">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L28 20M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">EAN</label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
-                    value={form.codigoBarrasEan || ''}
-                    onChange={e => setForm({...form, codigoBarrasEan: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cód. Visual (Auto)</label>
-                  <input 
-                    type="text"
-                    disabled={!form.id}
-                    placeholder={form.id ? "P-XXXX" : "Gerado ao salvar"}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none disabled:bg-gray-100 disabled:text-gray-500 font-mono" 
-                    value={form.codigoVisual || ''}
-                    onChange={e => setForm({...form, codigoVisual: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
-                  <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}>
-                    <option value="">Selecione uma categoria</option>
-                    {categorias.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.brandId} onChange={e => setForm({...form, brandId: e.target.value})}>
-                    <option value="">Sem marca</option>
-                    {marcas.map(m => (
-                      <option key={m.id} value={m.id}>{m.nome}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Observações / Detalhes</label>
-                <input 
-                  type="text" 
-                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
-                  value={form.descricaoVariante || ''}
-                  onChange={e => setForm({...form, descricaoVariante: e.target.value})}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">NCM (Opcional)</label>
-                  <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none font-mono"
-                    value={form.ncm || ''} onChange={e => setForm({...form, ncm: e.target.value})} placeholder="Ex: 6109.10.00" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidade</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                    value={form.unidade} onChange={e => setForm({...form, unidade: e.target.value})}>
-                    <option value="UN">UN (Unidade)</option>
-                    <option value="KG">KG (Quilograma)</option>
-                    <option value="G">G (Grama)</option>
-                    <option value="M">M (Metro)</option>
-                    <option value="CM">CM (Centímetro)</option>
-                    <option value="CX">CX (Caixa)</option>
-                    <option value="PC">PC (Peça)</option>
-                    <option value="LT">LT (Litro)</option>
-                    <option value="ML">ML (Mililitro)</option>
-                    <option value="PAR">PAR (Par)</option>
-                    <option value="PCT">PCT (Pacote)</option>
-                    <option value="MT2">MT2 (Metro²)</option>
-                    <option value="MT3">MT3 (Metro³)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso Bruto (kg)</label>
-                  <input type="number" min="0" step="0.001" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
-                    value={form.pesoBruto || ''} onChange={e => setForm({...form, pesoBruto: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso Líquido (kg)</label>
-                  <input type="number" min="0" step="0.001" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
-                    value={form.pesoLiquido || ''} onChange={e => setForm({...form, pesoLiquido: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Custo (R$) *</label>
-                  <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.precoCusto} onChange={e => setForm({...form, precoCusto: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Venda (R$) *</label>
-                  <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.precoVendaSugerido} onChange={e => setForm({...form, precoVendaSugerido: e.target.value})} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Alíquota de Imposto (%)</label>
-                <input type="number" min="0" max="100" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" 
-                  value={form.impostoEstimadoPercentual} 
-                  onChange={e => setForm({...form, impostoEstimadoPercentual: e.target.value})} 
-                  placeholder="Deixe vazio para usar alíquota da categoria/loja" />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Qtd. Estoque Inicial</label>
-                  <input type="number" step="0.001" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.qtdEstoqueAtual} onChange={e => setForm({...form, qtdEstoqueAtual: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estoque Mínimo</label>
-                  <input type="number" step="0.001" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.estoqueMinimo} onChange={e => setForm({...form, estoqueMinimo: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                    <option value="ATIVO">Ativo</option>
-                    <option value="INATIVO">Inativo</option>
-                    <option value="ENCOMENDA">Encomenda</option>
-                  </select>
-                </div>
-              </div>
-              
-              {form.status === 'ENCOMENDA' && (
-                <div className="grid grid-cols-2 gap-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                  <div>
-                    <label className="block text-xs font-medium text-amber-800 mb-1">Data do Pedido</label>
-                    <input type="datetime-local" className="w-full px-3 py-2 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value={form.dataPedido} onChange={e => setForm({...form, dataPedido: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-amber-800 mb-1">Previsão de Chegada</label>
-                    <input type="datetime-local" className="w-full px-3 py-2 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value={form.previsaoChegada} onChange={e => setForm({...form, previsaoChegada: e.target.value})} />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setModalAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Salvando...' : 'Salvar Produto'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Categoria */}
-      {modalCategoriaAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Nova Categoria</h2>
-            <form onSubmit={handleSalvarCategoria} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Categoria *</label>
-                <input required type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={formCat.nome} onChange={e => setFormCat({...formCat, nome: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cor Hexadecimal</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" className="w-10 h-10 p-1 border border-gray-300 rounded-lg cursor-pointer" value={formCat.corHexadecimal} onChange={e => setFormCat({...formCat, corHexadecimal: e.target.value})} />
-                  <input type="text" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={formCat.corHexadecimal} onChange={e => setFormCat({...formCat, corHexadecimal: e.target.value})} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Alíquota de Imposto (%)</label>
-                <input type="number" min="0" max="100" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" 
-                  value={formCat.aliquotaImposto} 
-                  onChange={e => setFormCat({...formCat, aliquotaImposto: e.target.value})} 
-                  placeholder="Deixe vazio para usar a alíquota da loja" />
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setModalCategoriaAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Marca */}
-      {modalMarcaAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Nova Marca</h2>
-            <form onSubmit={handleSalvarMarca} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Marca *</label>
-                <input required type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={formMarca.nome} onChange={e => setFormMarca({...formMarca, nome: e.target.value})} />
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setModalMarcaAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Entrada de Produtos */}
-      {modalEntradaAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Entrada de Mercadorias (Rateio de Frete)</h2>
-            <p className="text-sm text-gray-500 mb-6">Insira os itens da nota, custos e o frete total. O sistema calculará o custo final e atualizará o estoque.</p>
-            
-            <form onSubmit={handleSalvarEntrada} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor (Opcional)</label>
-                  <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formEntrada.fornecedor} onChange={e => setFormEntrada({...formEntrada, fornecedor: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Frete Total (R$)</label>
-                  <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formEntrada.valorFreteTotal} onChange={e => setFormEntrada({...formEntrada, valorFreteTotal: e.target.value})} />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-semibold text-gray-800">Itens da Entrada</h3>
-                  <button type="button" onClick={adicionarItemEntrada} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">+ Adicionar Item</button>
-                </div>
-                
-                {formEntrada.itens.map((item, index) => (
-                  <div key={index} className="flex gap-3 items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Produto</label>
-                      <select required className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" value={item.productId} onChange={e => {
-                        const newItens = [...formEntrada.itens];
-                        newItens[index].productId = e.target.value;
-                        setFormEntrada({...formEntrada, itens: newItens});
-                      }}>
-                        <option value="">Selecione um produto</option>
-                        {produtos.map(p => (
-                          <option key={p.id} value={p.id}>{p.codigoVisual ? `[${p.codigoVisual}] ` : ''}{p.nome}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Qtd</label>
-                      <input required type="number" step="0.001" className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={item.quantidade} onChange={e => {
-                        const newItens = [...formEntrada.itens];
-                        newItens[index].quantidade = e.target.value;
-                        setFormEntrada({...formEntrada, itens: newItens});
-                      }} />
-                    </div>
-                    <div className="w-32">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Custo Un. (R$)</label>
-                      <input required type="number" step="0.01" className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={item.custoFornecedor} onChange={e => {
-                        const newItens = [...formEntrada.itens];
-                        newItens[index].custoFornecedor = e.target.value;
-                        setFormEntrada({...formEntrada, itens: newItens});
-                      }} />
-                    </div>
-                    <button type="button" onClick={() => {
-                      const newItens = formEntrada.itens.filter((_, i) => i !== index);
-                      setFormEntrada({...formEntrada, itens: newItens});
-                    }} className="mb-1 text-red-500 hover:text-red-700 font-bold px-2">X</button>
-                  </div>
-                ))}
-                {formEntrada.itens.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">Nenhum produto adicionado. Clique em "+ Adicionar Item".</p>
+                )}
+                <label className="cursor-pointer text-sm text-brand-600 font-medium hover:text-brand-800 bg-brand-50 px-3 py-2 rounded border border-brand-200">
+                  Escolher Foto
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                </label>
+                {form.imageUrl && (
+                  <button type="button" onClick={() => setForm({...form, imageUrl: ''})} className="text-red-500 hover:text-red-700 text-sm font-medium">
+                    Remover
+                  </button>
                 )}
               </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setModalEntradaAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                <button type="submit" disabled={saving || formEntrada.itens.length === 0} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Processando...' : 'Finalizar Entrada'}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">EAN</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  className="flex-1 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
+                  value={form.codigoBarrasEan || ''}
+                  onChange={e => setForm({...form, codigoBarrasEan: e.target.value})}
+                />
+                <button
+                  type="button"
+                  onClick={() => setScannerCadastroAberto(true)}
+                  className="px-3 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium hover:bg-brand-100 transition whitespace-nowrap"
+                  title="Escanear código de barras com a câmera"
+                >
+                  Escanear
                 </button>
               </div>
-            </form>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cód. Visual (Auto)</label>
+              <input 
+                type="text"
+                disabled={!form.id}
+                placeholder={form.id ? "P-XXXX" : "Gerado ao salvar"}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none disabled:bg-gray-100 disabled:text-gray-500 font-mono" 
+                value={form.codigoVisual || ''}
+                onChange={e => setForm({...form, codigoVisual: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+              <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}>
+                <option value="">Selecione uma categoria</option>
+                {cats.items.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.brandId} onChange={e => setForm({...form, brandId: e.target.value})}>
+                <option value="">Sem marca</option>
+                {brands.items.map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Observações / Detalhes</label>
+            <input 
+              type="text" 
+              className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none" 
+              value={form.descricaoVariante || ''}
+              onChange={e => setForm({...form, descricaoVariante: e.target.value})}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">NCM (Opcional)</label>
+              <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none font-mono"
+                value={form.ncm || ''} onChange={e => setForm({...form, ncm: e.target.value})} placeholder="Ex: 6109.10.00" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unidade</label>
+              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                value={form.unidade} onChange={e => setForm({...form, unidade: e.target.value})}>
+                <option value="UN">UN (Unidade)</option>
+                <option value="KG">KG (Quilograma)</option>
+                <option value="G">G (Grama)</option>
+                <option value="M">M (Metro)</option>
+                <option value="CM">CM (Centímetro)</option>
+                <option value="CX">CX (Caixa)</option>
+                <option value="PC">PC (Peça)</option>
+                <option value="LT">LT (Litro)</option>
+                <option value="ML">ML (Mililitro)</option>
+                <option value="PAR">PAR (Par)</option>
+                <option value="PCT">PCT (Pacote)</option>
+                <option value="MT2">MT2 (Metro²)</option>
+                <option value="MT3">MT3 (Metro³)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Peso Bruto (kg)</label>
+              <input type="number" min="0" step="0.001" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
+                value={form.pesoBruto || ''} onChange={e => setForm({...form, pesoBruto: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Peso Líquido (kg)</label>
+              <input type="number" min="0" step="0.001" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
+                value={form.pesoLiquido || ''} onChange={e => setForm({...form, pesoLiquido: e.target.value})} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Custo (R$) *</label>
+              <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.precoCusto} onChange={e => setForm({...form, precoCusto: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Venda (R$) *</label>
+              <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.precoVendaSugerido} onChange={e => setForm({...form, precoVendaSugerido: e.target.value})} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Alíquota de Imposto (%)</label>
+            <input type="number" min="0" max="100" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" 
+              value={form.impostoEstimadoPercentual} 
+              onChange={e => setForm({...form, impostoEstimadoPercentual: e.target.value})} 
+              placeholder="Deixe vazio para usar alíquota da categoria/loja" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Qtd. Estoque Inicial</label>
+              <input type="number" step="0.001" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.qtdEstoqueAtual} onChange={e => setForm({...form, qtdEstoqueAtual: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estoque Mínimo</label>
+              <input type="number" step="0.001" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={form.estoqueMinimo} onChange={e => setForm({...form, estoqueMinimo: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 bg-white" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                <option value="ATIVO">Ativo</option>
+                <option value="INATIVO">Inativo</option>
+                <option value="ENCOMENDA">Encomenda</option>
+              </select>
+            </div>
+          </div>
+          
+          {form.status === 'ENCOMENDA' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
+              <div>
+                <label className="block text-xs font-medium text-amber-800 mb-1">Data do Pedido</label>
+                <input type="datetime-local" className="w-full px-3 py-2 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value={form.dataPedido} onChange={e => setForm({...form, dataPedido: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-amber-800 mb-1">Previsão de Chegada</label>
+                <input type="datetime-local" className="w-full px-3 py-2 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value={form.previsaoChegada} onChange={e => setForm({...form, previsaoChegada: e.target.value})} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={() => setModalAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
+              {saving ? 'Salvando...' : 'Salvar Produto'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Categoria */}
+      <Modal
+        open={cats.modalOpen}
+        onClose={cats.closeModal}
+        title="Nova Categoria"
+        size="sm"
+        rounded="xl"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); void cats.handleSave(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Categoria *</label>
+            <input required type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={cats.form.nome} onChange={e => cats.setForm({...cats.form, nome: e.target.value})} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cor Hexadecimal</label>
+            <div className="flex gap-2 items-center">
+              <input type="color" className="w-10 h-10 p-1 border border-gray-300 rounded-lg cursor-pointer" value={cats.form.corHexadecimal} onChange={e => cats.setForm({...cats.form, corHexadecimal: e.target.value})} />
+              <input type="text" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={cats.form.corHexadecimal} onChange={e => cats.setForm({...cats.form, corHexadecimal: e.target.value})} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Alíquota de Imposto (%)</label>
+            <input type="number" min="0" max="100" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" 
+              value={cats.form.aliquotaImposto} 
+              onChange={e => cats.setForm({...cats.form, aliquotaImposto: e.target.value})} 
+              placeholder="Deixe vazio para usar a alíquota da loja" />
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={cats.closeModal} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+            <button type="submit" disabled={cats.saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
+              {cats.saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Marca */}
+      <Modal
+        open={brands.modalOpen}
+        onClose={brands.closeModal}
+        title="Nova Marca"
+        size="sm"
+        rounded="xl"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); void brands.handleSave(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Marca *</label>
+            <input required type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500" value={brands.form.nome} onChange={e => brands.setForm({...brands.form, nome: e.target.value})} />
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={brands.closeModal} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+            <button type="submit" disabled={brands.saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50">
+              {brands.saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Entrada de Produtos */}
+      <Modal
+        open={modalEntradaAberto}
+        onClose={() => setModalEntradaAberto(false)}
+        title="Entrada de Mercadorias (Rateio de Frete)"
+        rounded="xl"
+      >
+        <p className="text-sm text-gray-500 mb-6">Insira os itens da nota, custos e o frete total. O sistema calculará o custo final e atualizará o estoque.</p>
+        
+        <form onSubmit={handleSalvarEntrada} className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor (Opcional)</label>
+              <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formEntrada.fornecedor} onChange={e => setFormEntrada({...formEntrada, fornecedor: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Frete Total (R$)</label>
+              <input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formEntrada.valorFreteTotal} onChange={e => setFormEntrada({...formEntrada, valorFreteTotal: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800">Itens da Entrada</h3>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setScannerEntradaAberto(true)} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">🔍 Escanear</button>
+                <button type="button" onClick={adicionarItemEntrada} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">+ Adicionar Item</button>
+              </div>
+            </div>
+            
+            {formEntrada.itens.map((item, index) => (
+              <div key={index} className="flex flex-col sm:flex-row gap-3 sm:items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div className="flex-1 w-full sm:w-auto">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Produto</label>
+                  <select required className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" value={item.productId} onChange={e => {
+                    const newItens = [...formEntrada.itens];
+                    newItens[index].productId = e.target.value;
+                    setFormEntrada({...formEntrada, itens: newItens});
+                  }}>
+                    <option value="">Selecione um produto</option>
+                    {produtos.map(p => (
+                      <option key={p.id} value={p.id}>{p.codigoVisual ? `[${p.codigoVisual}] ` : ''}{p.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-3 w-full sm:w-auto">
+                  <div className="w-24">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Qtd</label>
+                    <input required type="number" step="0.001" className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={item.quantidade} onChange={e => {
+                      const newItens = [...formEntrada.itens];
+                      newItens[index].quantidade = e.target.value;
+                      setFormEntrada({...formEntrada, itens: newItens});
+                    }} />
+                  </div>
+                  <div className="w-32">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Custo Un. (R$)</label>
+                    <input required type="number" step="0.01" className="w-full px-3 py-1.5 border border-gray-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={item.custoFornecedor} onChange={e => {
+                      const newItens = [...formEntrada.itens];
+                      newItens[index].custoFornecedor = e.target.value;
+                      setFormEntrada({...formEntrada, itens: newItens});
+                    }} />
+                  </div>
+                  <button type="button" onClick={() => {
+                    const newItens = formEntrada.itens.filter((_, i) => i !== index);
+                    setFormEntrada({...formEntrada, itens: newItens});
+                  }} className="mb-1 text-red-500 hover:text-red-700 font-bold px-2">X</button>
+                </div>
+              </div>
+            ))}
+            {formEntrada.itens.length === 0 && (
+              <p className="text-sm text-gray-500 italic">Nenhum produto adicionado. Clique em "+ Adicionar Item".</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <button type="button" onClick={() => setModalEntradaAberto(false)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+            <button type="submit" disabled={saving || formEntrada.itens.length === 0} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">
+              {saving ? 'Processando...' : 'Finalizar Entrada'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <BarcodeScannerModal
+        aberto={scannerCadastroAberto}
+        onFechar={() => setScannerCadastroAberto(false)}
+        onCodigo={handleCodigoScannerCadastro}
+        titulo="Escanear EAN do produto"
+      />
+      <BarcodeScannerModal
+        aberto={scannerEntradaAberto}
+        onFechar={() => setScannerEntradaAberto(false)}
+        onCodigo={handleCodigoScannerEntrada}
+        titulo="Escanear produto para entrada"
+      />
     </div>
   );
 }
@@ -1117,7 +1190,7 @@ function StockMovementsContent() {
             <tbody>
               {movements.map(m => (
                 <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 text-xs text-gray-500">{new Date(m.createdAt).toLocaleString()}</td>
+                  <td className="py-3 text-xs text-gray-500">{formatDateTimeBR(m.createdAt)}</td>
                   <td className="py-3">{m.product.nome}</td>
                   <td className="py-3">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded ${tipoColor[m.tipo] || 'bg-gray-100'}`}>
@@ -1144,44 +1217,45 @@ function StockMovementsContent() {
         </div>
       )}
 
-      {adjustModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-semibold text-gray-900">Ajustar Estoque</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Produto</label>
-                <select value={adjustForm.productId} onChange={e => setAdjustForm({...adjustForm, productId: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
-                  <option value="">Selecione</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nova Quantidade em Estoque</label>
-                <input type="number" min="0" value={adjustForm.novaQuantidade}
-                  onChange={e => setAdjustForm({...adjustForm, novaQuantidade: Number(e.target.value)})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo do Ajuste</label>
-                <input type="text" value={adjustForm.observacao}
-                  onChange={e => setAdjustForm({...adjustForm, observacao: e.target.value})}
-                  placeholder="Ex: Perda, quebra, contagem física..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3">
-              <button onClick={() => setAdjustModal(false)} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg">Cancelar</button>
-              <button onClick={handleAdjust} disabled={saving || !adjustForm.productId} className="px-4 py-2 bg-brand-600 text-white rounded-lg disabled:opacity-50">
-                {saving ? 'Ajustando...' : 'Confirmar Ajuste'}
-              </button>
-            </div>
+      <Modal
+        open={adjustModal}
+        onClose={() => setAdjustModal(false)}
+        size="sm"
+        rounded="xl" padded={false}
+      >
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h3 className="font-semibold text-gray-900">Ajustar Estoque</h3>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Produto</label>
+            <select value={adjustForm.productId} onChange={e => setAdjustForm({...adjustForm, productId: e.target.value})}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
+              <option value="">Selecione</option>
+              {products.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nova Quantidade em Estoque</label>
+            <input type="number" min="0" value={adjustForm.novaQuantidade}
+              onChange={e => setAdjustForm({...adjustForm, novaQuantidade: Number(e.target.value)})}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo do Ajuste</label>
+            <input type="text" value={adjustForm.observacao}
+              onChange={e => setAdjustForm({...adjustForm, observacao: e.target.value})}
+              placeholder="Ex: Perda, quebra, contagem física..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2" />
           </div>
         </div>
-      )}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3">
+          <button onClick={() => setAdjustModal(false)} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg">Cancelar</button>
+          <button onClick={handleAdjust} disabled={saving || !adjustForm.productId} className="px-4 py-2 bg-brand-600 text-white rounded-lg disabled:opacity-50">
+            {saving ? 'Ajustando...' : 'Confirmar Ajuste'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

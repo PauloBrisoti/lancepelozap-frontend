@@ -5,7 +5,6 @@ import type { Sale, SaleItem } from '../types/api';
 
 const mockFetch = vi.fn();
 const mockRefetch = vi.fn();
-const mockMutate = vi.fn();
 
 let mockSalesData: Sale[] = [];
 const mockQueryState: { data: Sale[] | undefined; isLoading: boolean; error: Error | null } = {
@@ -20,7 +19,6 @@ vi.mock('../lib/api', () => ({
 
 vi.mock('../lib/query', () => ({
   useApiQuery: () => ({ ...mockQueryState, refetch: mockRefetch }),
-  useApiMutation: () => ({ mutate: mockMutate, isPending: false }),
 }));
 
 vi.mock('react-hot-toast', () => ({

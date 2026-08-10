@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import { Modal } from '../components/Modal';
+import { useModal } from '../hooks/useModal';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface Supplier {
   id: string;
@@ -17,9 +20,7 @@ interface Supplier {
 }
 
 export function FornecedoresPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const modal = useModal();
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
@@ -37,24 +38,17 @@ export function FornecedoresPage() {
     observacoes: '',
   });
 
-  useEffect(() => { loadSuppliers(); }, [statusFilter, search]);
-
-  const loadSuppliers = async () => {
-    try {
-      setLoading(true);
-      let query = '';
-      if (statusFilter) query += `?status=${statusFilter}`;
-      if (search) query += `${query ? '&' : '?'}search=${encodeURIComponent(search)}`;
-      const data = await fetchApi(`/suppliers${query}`);
-      setSuppliers(data);
-    } catch { toast.error('Erro ao carregar fornecedores'); }
-    finally { setLoading(false); }
-  };
+  const query = (statusFilter ? `?status=${statusFilter}` : '') + (search ? `${statusFilter ? '&' : '?'}search=${encodeURIComponent(search)}` : '');
+  const { data: suppliers = [], isLoading, refetch } = useApiQuery<Supplier[]>(
+    ['suppliers', statusFilter, search],
+    `/suppliers${query}`,
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
   const openCreate = () => {
     setEditing(null);
     setForm({ nome: '', tipoPessoa: 'PJ', cnpjCpf: '', ieRg: '', telefone: '', email: '', cep: '', endereco: '', observacoes: '' });
-    setShowModal(true);
+    modal.openModal();
   };
 
   const openEdit = (s: Supplier) => {
@@ -70,7 +64,7 @@ export function FornecedoresPage() {
       endereco: s.endereco || '',
       observacoes: s.observacoes || '',
     });
-    setShowModal(true);
+    modal.openModal();
   };
 
   const handleSave = async () => {
@@ -79,15 +73,14 @@ export function FornecedoresPage() {
       setSaving(true);
       const body = { ...form };
       if (editing) {
-        const updated = await fetchApi(`/suppliers/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
-        setSuppliers(prev => prev.map(s => s.id === editing.id ? updated : s));
+        await fetchApi(`/suppliers/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
         toast.success('Fornecedor atualizado!');
       } else {
-        const created = await fetchApi('/suppliers', { method: 'POST', body: JSON.stringify(body) });
-        setSuppliers(prev => [created, ...prev]);
+        await fetchApi('/suppliers', { method: 'POST', body: JSON.stringify(body) });
         toast.success('Fornecedor criado!');
       }
-      setShowModal(false);
+      await refetch();
+      modal.closeModal();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao salvar'); }
     finally { setSaving(false); }
   };
@@ -95,9 +88,9 @@ export function FornecedoresPage() {
   const handleToggleStatus = async (s: Supplier) => {
     const newStatus = s.status === 'ATIVO' ? 'INATIVO' : 'ATIVO';
     try {
-      const updated = await fetchApi(`/suppliers/${s.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
-      setSuppliers(prev => prev.map(x => x.id === s.id ? updated : x));
+      await fetchApi(`/suppliers/${s.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
       toast.success(`Fornecedor ${newStatus === 'ATIVO' ? 'ativado' : 'inativado'}`);
+      await refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
 
@@ -105,8 +98,8 @@ export function FornecedoresPage() {
     if (!window.confirm(`Remover fornecedor "${s.nome}"?`)) return;
     try {
       await fetchApi(`/suppliers/${s.id}`, { method: 'DELETE' });
-      setSuppliers(prev => prev.filter(x => x.id !== s.id));
       toast.success('Fornecedor removido');
+      await refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
 
@@ -134,7 +127,7 @@ export function FornecedoresPage() {
         <button onClick={() => { setStatusFilter('INATIVO'); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${statusFilter === 'INATIVO' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600'}`}>Inativos</button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-gray-500">Carregando...</div>
       ) : suppliers.length === 0 ? (
         <div className="text-center py-12 text-gray-400">Nenhum fornecedor encontrado</div>
@@ -177,12 +170,8 @@ export function FornecedoresPage() {
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar' : 'Novo'} Fornecedor</h2>
-
-            <div className="space-y-4">
+      <Modal open={modal.open} onClose={modal.closeModal} closeDisabled={saving} title={`${editing ? 'Editar' : 'Novo'} Fornecedor`} size="md">
+        <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
                 <input value={form.nome} onChange={e => setField('nome', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -236,14 +225,12 @@ export function FornecedoresPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
+              <button onClick={modal.closeModal} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
               <button onClick={handleSave} disabled={saving || !form.nome.trim()} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

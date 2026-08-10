@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchApi } from '../lib/api';
+import { useCrudList } from '../hooks/useCrudList';
 import toast from 'react-hot-toast';
 import { Banknote, CalendarCheck, Activity, PawPrint, Clock, MessageCircle, Trash2, Pencil, CheckCircle2, History, HandCoins, Syringe, Scale, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ServiceOrder, ServiceOrderItem } from '../types/api';
+import { formatDateBR } from '../lib/dates';
+import { todayLocalDate } from '../utils/format';
 
 interface PetTutor {
   id: string; nome: string; telefone: string; email?: string;
@@ -41,6 +44,9 @@ interface PetServiceOrderItem {
   catalog?: { id: string; nome: string };
 }
 
+interface TutorForm { nome: string; telefone: string; email: string; endereco: string; bairro: string; cidade: string; cep: string; observacoes: string; }
+interface CatalogForm { nome: string; descricao: string; preco: string; categoria: string; tipoDuracao: string; }
+
 interface PetServiceOrder {
   id: string; petId: string; status: string;
   dataEntrada: string; dataSaida?: string; horaInicio?: string; horaFim?: string;
@@ -71,10 +77,36 @@ export default function OperacionalPetPage() {
   const [loading, setLoading] = useState(true);
 
   // Dados
-  const [tutors, setTutors] = useState<PetTutor[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
-  const [catalog, setCatalog] = useState<PetServiceCatalog[]>([]);
   const [orders, setOrders] = useState<PetServiceOrder[]>([]);
+
+  const tutorsList = useCrudList<PetTutor, TutorForm>({
+    endpoint: '/pet/tutors',
+    loadList: () => fetchApi('/pet/tutors').catch(() => []),
+    createDefault: () => ({ nome: '', telefone: '', email: '', endereco: '', bairro: '', cidade: '', cep: '', observacoes: '' }),
+    toForm: (t) => ({ nome: t.nome, telefone: t.telefone || '', email: t.email || '', endereco: t.endereco || '', bairro: t.bairro || '', cidade: t.cidade || '', cep: t.cep || '', observacoes: t.observacoes || '' }),
+    messages: {
+      loadError: 'Erro ao carregar tutores.',
+      createSuccess: 'Tutor cadastrado!',
+      updateSuccess: 'Tutor atualizado!',
+      deleteConfirm: 'Excluir este tutor e todos seus pets?',
+      deleteSuccess: 'Tutor excluído!',
+    },
+  });
+
+  const catalogList = useCrudList<PetServiceCatalog, CatalogForm>({
+    endpoint: '/pet/service-catalog',
+    loadList: () => fetchApi('/pet/service-catalog').catch(() => []),
+    createDefault: () => ({ nome: '', descricao: '', preco: '', categoria: 'BANHO', tipoDuracao: 'INDETERMINADO' }),
+    toForm: (c) => ({ nome: c.nome, descricao: c.descricao || '', preco: String(c.preco), categoria: c.categoria || 'OUTRO', tipoDuracao: c.tipoDuracao || 'INDETERMINADO' }),
+    beforeSave: (form) => ({ ...form, preco: Number(form.preco) }),
+    messages: {
+      loadError: 'Erro ao carregar catálogo.',
+      createSuccess: 'Serviço cadastrado!',
+      updateSuccess: 'Serviço atualizado!',
+      deleteSuccess: 'Serviço excluído!',
+    },
+  });
 
   // Busca
   const [searchTutor, setSearchTutor] = useState('');
@@ -84,23 +116,19 @@ export default function OperacionalPetPage() {
   const [orcamentoSent, setOrcamentoSent] = useState<Set<string>>(new Set());
 
   // Modais
-  const [modalTutor, setModalTutor] = useState(false);
   const [modalPet, setModalPet] = useState(false);
   const [modalOrder, setModalOrder] = useState(false);
-  const [modalCatalog, setModalCatalog] = useState(false);
-  const [selectedTutor, setSelectedTutor] = useState<PetTutor | null>(null);
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [tutorDetail, setTutorDetail] = useState<PetTutor | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
-  const [selectedCatalog, setSelectedCatalog] = useState<PetServiceCatalog | null>(null);
   const [receiveModal, setReceiveModal] = useState<PetServiceOrder | null>(null);
   const [receiveForm, setReceiveForm] = useState({ formaPagamento: 'DINHEIRO' });
   const [savingReceive, setSavingReceive] = useState(false);
   const [historyModal, setHistoryModal] = useState<Pet | null>(null);
   const [fichaTab, setFichaTab] = useState<'historico' | 'vacinas' | 'peso'>('historico');
   const [pesosPet, setPesosPet] = useState<PetWeight[]>([]);
-  const [formVacina, setFormVacina] = useState({ nome: '', tipo: 'VACINA', dose: '', dataAplicacao: new Date().toISOString().slice(0, 10), proximaDose: '' });
-  const [formPeso, setFormPeso] = useState({ pesoKg: '', dataPesagem: new Date().toISOString().slice(0, 10) });
+  const [formVacina, setFormVacina] = useState({ nome: '', tipo: 'VACINA', dose: '', dataAplicacao: todayLocalDate(), proximaDose: '' });
+  const [formPeso, setFormPeso] = useState({ pesoKg: '', dataPesagem: todayLocalDate() });
   const [semanaInicio, setSemanaInicio] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -109,23 +137,17 @@ export default function OperacionalPetPage() {
   });
 
   // Formulários
-  const [formTutor, setFormTutor] = useState({ nome: '', telefone: '', email: '', endereco: '', bairro: '', cidade: '', cep: '', observacoes: '' });
   const [formPet, setFormPet] = useState({ tutorId: '', nome: '', especie: 'CACHORRO', raca: '', porte: '', sexo: '', dataNascimento: '', cor: '', observacoes: '', pesoKg: '' });
-  const [formCatalog, setFormCatalog] = useState({ nome: '', descricao: '', preco: '', categoria: 'BANHO', tipoDuracao: 'INDETERMINADO' });
   const [formOrder, setFormOrder] = useState<any>({ petId: '', dataEntrada: '', horaInicio: '', horaFim: '', dataSaida: '', items: [{ catalogItemId: '', quantidade: 1, precoUnitario: '' }], desconto: 0, observacoes: '', mesesRecorrencia: 1, recorrente: false });
 
   const carregarTudo = async () => {
     setLoading(true);
     try {
-      const [t, p, c, o] = await Promise.all([
-        fetchApi('/pet/tutors').catch(() => []),
+      const [p, o] = await Promise.all([
         fetchApi('/pet/pets').catch(() => []),
-        fetchApi('/pet/service-catalog').catch(() => []),
         fetchApi('/pet/service-orders').catch(() => []),
       ]);
-      setTutors(t ?? []);
       setPets(p ?? []);
-      setCatalog(c ?? []);
       setOrders(o ?? []);
     } catch { /* silent */ }
     setLoading(false);
@@ -134,33 +156,8 @@ export default function OperacionalPetPage() {
   useEffect(() => { carregarTudo(); }, []);
 
   // ── Tutor CRUD ──
-  const salvarTutor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (selectedTutor) {
-        await fetchApi(`/pet/tutors/${selectedTutor.id}`, { method: 'PUT', body: JSON.stringify(formTutor) });
-        toast.success('Tutor atualizado!');
-      } else {
-        await fetchApi('/pet/tutors', { method: 'POST', body: JSON.stringify(formTutor) });
-        toast.success('Tutor cadastrado!');
-      }
-      setModalTutor(false); setSelectedTutor(null);
-      setFormTutor({ nome: '', telefone: '', email: '', endereco: '', bairro: '', cidade: '', cep: '', observacoes: '' });
-      carregarTudo();
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro ao salvar tutor'); }
-  };
-
-  const excluirTutor = async (id: string) => {
-    if (!window.confirm('Excluir este tutor e todos seus pets?')) return;
-    try { await fetchApi(`/pet/tutors/${id}`, { method: 'DELETE' }); toast.success('Tutor excluído!'); carregarTudo(); }
-    catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro ao excluir'); }
-  };
-
-  const abrirEditarTutor = (t: PetTutor) => {
-    setSelectedTutor(t);
-    setFormTutor({ nome: t.nome, telefone: t.telefone || '', email: t.email || '', endereco: t.endereco || '', bairro: t.bairro || '', cidade: t.cidade || '', cep: t.cep || '', observacoes: t.observacoes || '' });
-    setModalTutor(true);
-  };
+  const abrirEditarTutor = (t: PetTutor) => tutorsList.openEdit(t);
+  const excluirTutor = (id: string) => tutorsList.handleDelete(id);
 
   // ── Pet CRUD ──
   const salvarPet = async (e: React.FormEvent) => {
@@ -215,34 +212,8 @@ export default function OperacionalPetPage() {
   };
 
   // ── Catálogo CRUD ──
-  const salvarCatalog = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const payload = { ...formCatalog, preco: Number(formCatalog.preco) };
-      if (selectedCatalog) {
-        await fetchApi(`/pet/service-catalog/${selectedCatalog.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        toast.success('Serviço atualizado!');
-      } else {
-        await fetchApi('/pet/service-catalog', { method: 'POST', body: JSON.stringify(payload) });
-        toast.success('Serviço cadastrado!');
-      }
-      setModalCatalog(false); setSelectedCatalog(null);
-      setFormCatalog({ nome: '', descricao: '', preco: '', categoria: 'BANHO', tipoDuracao: 'INDETERMINADO' });
-      carregarTudo();
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro ao salvar'); }
-  };
-
-  const abrirNovoCatalog = () => {
-    setSelectedCatalog(null);
-    setFormCatalog({ nome: '', descricao: '', preco: '', categoria: 'BANHO', tipoDuracao: 'INDETERMINADO' });
-    setModalCatalog(true);
-  };
-
-  const abrirEditarCatalog = (c: PetServiceCatalog) => {
-    setSelectedCatalog(c);
-    setFormCatalog({ nome: c.nome, descricao: c.descricao || '', preco: String(c.preco), categoria: c.categoria || 'OUTRO', tipoDuracao: c.tipoDuracao || 'INDETERMINADO' });
-    setModalCatalog(true);
-  };
+  const abrirNovoCatalog = () => catalogList.openNew();
+  const abrirEditarCatalog = (c: PetServiceCatalog) => catalogList.openEdit(c);
 
   // ── Ordem de Serviço ──
   const toLocalInput = (iso: string) => {
@@ -284,7 +255,7 @@ export default function OperacionalPetPage() {
         const diarias = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
         setFormOrder((prev: ServiceOrder) => {
           const items = [...prev.items];
-          const idx = items.findIndex(it => catalog.find(c => c.id === it.catalogItemId)?.tipoDuracao === 'DIARIA');
+          const idx = items.findIndex(it => catalogList.items.find(c => c.id === it.catalogItemId)?.tipoDuracao === 'DIARIA');
           if (idx >= 0) items[idx] = { ...items[idx], quantidade: diarias };
           return { ...prev, items };
         });
@@ -301,7 +272,7 @@ export default function OperacionalPetPage() {
     const items = [...formOrder.items];
     items[idx] = { ...items[idx], [field]: value };
     if (field === 'catalogItemId') {
-      const cat = catalog.find(c => c.id === value);
+      const cat = catalogList.items.find(c => c.id === value);
       if (cat) items[idx].precoUnitario = String(cat.preco);
     }
     setFormOrder({ ...formOrder, items });
@@ -360,7 +331,7 @@ export default function OperacionalPetPage() {
       return;
     }
     const pet = pets.find(p => p.id === formOrder.petId);
-    const tutor = tutors.find(t => t.id === pet?.tutorId);
+    const tutor = tutorsList.items.find(t => t.id === pet?.tutorId);
     const waWindow = tutor?.telefone ? window.open('', '_blank') : null;
     try {
       const order = await fetchApi('/pet/service-orders', {
@@ -377,7 +348,7 @@ export default function OperacionalPetPage() {
       carregarTudo();
       if (tutor?.telefone && waWindow) {
         const servicos = formOrder.items.map((i: ServiceOrderItem) => {
-          const cat = catalog.find(c => c.id === i.catalogItemId);
+          const cat = catalogList.items.find(c => c.id === i.catalogItemId);
           return `• ${cat?.nome || 'Serviço'}: ${formatBRL(Number(i.precoUnitario) * Number(i.quantidade))}`;
         }).join('\n');
         const msg = `🐾 ORÇAMENTO - ${pet?.nome || 'Pet'}\n\nServiços:\n${servicos}\n\nTotal: ${formatBRL(valorFinal)}\n\nAguardamos sua confirmação! 🐶`;
@@ -433,8 +404,8 @@ export default function OperacionalPetPage() {
   // ── Filtros ──
   const tutoresFiltrados = useMemo(() => {
     const q = searchTutor.toLowerCase();
-    return tutors.filter(t => t.nome.toLowerCase().includes(q) || t.telefone?.includes(q));
-  }, [tutors, searchTutor]);
+    return tutorsList.items.filter(t => t.nome.toLowerCase().includes(q) || t.telefone?.includes(q));
+  }, [tutorsList.items, searchTutor]);
 
   const ordensFiltradas = useMemo(() => {
     let list = orders;
@@ -518,7 +489,7 @@ export default function OperacionalPetPage() {
         body: JSON.stringify({ ...formVacina, petId: historyModal.id, proximaDose: formVacina.proximaDose || null }),
       });
       toast.success('Registrado com sucesso!');
-      setFormVacina({ nome: '', tipo: 'VACINA', dose: '', dataAplicacao: new Date().toISOString().slice(0, 10), proximaDose: '' });
+      setFormVacina({ nome: '', tipo: 'VACINA', dose: '', dataAplicacao: todayLocalDate(), proximaDose: '' });
       await carregarTudo();
       setHistoryModal(pets.find(p => p.id === historyModal.id) || historyModal);
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro ao registrar'); }
@@ -539,7 +510,7 @@ export default function OperacionalPetPage() {
         body: JSON.stringify({ petId: historyModal.id, pesoKg: Number(formPeso.pesoKg), dataPesagem: formPeso.dataPesagem }),
       });
       toast.success('Peso registrado!');
-      setFormPeso({ pesoKg: '', dataPesagem: new Date().toISOString().slice(0, 10) });
+      setFormPeso({ pesoKg: '', dataPesagem: todayLocalDate() });
       const w = await fetchApi(`/pet/weights?petId=${historyModal.id}`);
       setPesosPet(Array.isArray(w) ? w : []);
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Erro ao registrar peso'); }
@@ -579,7 +550,7 @@ export default function OperacionalPetPage() {
             </button>
           )}
           {activeTab === 'TUTORES' && (
-            <button onClick={() => { setSelectedTutor(null); setFormTutor({ nome: '', telefone: '', email: '', endereco: '', bairro: '', cidade: '', cep: '', observacoes: '' }); setModalTutor(true); }}
+            <button onClick={tutorsList.openNew}
               className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
               Novo Tutor
@@ -742,7 +713,7 @@ export default function OperacionalPetPage() {
                         <p className="font-medium text-gray-900">{o.pet.nome}</p>
                         <p className="text-xs text-gray-400">{o.pet.tutor.nome} {o.pet.tutor.telefone ? `• ${o.pet.tutor.telefone}` : ''}</p>
                       </td>
-                      <td className="p-4 text-gray-600">{new Date(o.dataEntrada).toLocaleDateString('pt-BR')}</td>
+                      <td className="p-4 text-gray-600">{formatDateBR(o.dataEntrada)}</td>
                       <td className="p-4 text-gray-600 text-xs">{o.items?.map(i => i.catalog?.nome).filter(Boolean).join(', ') || '-'}</td>
                       <td className="p-4">
                         <span className={`text-xs font-semibold px-2 py-1 rounded ${STATUS_CORES[o.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_OS[o.status] || o.status}</span>
@@ -800,7 +771,7 @@ export default function OperacionalPetPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{o.pet.nome}</p>
-                      <p className="text-xs text-gray-400 truncate">{o.pet.tutor.nome} • {new Date(o.dataEntrada).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs text-gray-400 truncate">{o.pet.tutor.nome} • {formatDateBR(o.dataEntrada)}</p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">{o.items?.map(i => i.catalog?.nome).filter(Boolean).join(', ') || '-'}</p>
                     </div>
                     <div className="text-right shrink-0">
@@ -1009,7 +980,7 @@ export default function OperacionalPetPage() {
                                     <p className="font-medium text-gray-900">{pet.nome} <span className="text-xs text-gray-400">({pet.especie}{pet.raca ? ` • ${pet.raca}` : ''})</span>
                                       {pet.adotado && (
                                         <span className="ml-1.5 align-middle text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                                          Adotado {pet.dataAdocao ? new Date(pet.dataAdocao).toLocaleDateString('pt-BR') : ''}
+                                          Adotado {pet.dataAdocao ? formatDateBR(pet.dataAdocao) : ''}
                                         </span>
                                       )}
                                     </p>
@@ -1065,7 +1036,7 @@ export default function OperacionalPetPage() {
                 <th className="p-4 font-medium text-right">Ações</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {catalog.map(c => (
+                {catalogList.items.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="p-4">
                       <p className="font-medium text-gray-900">{c.nome}</p>
@@ -1087,7 +1058,7 @@ export default function OperacionalPetPage() {
                     </td>
                   </tr>
                 ))}
-                {catalog.length === 0 && (
+                {catalogList.items.length === 0 && (
                   <tr><td colSpan={5} className="p-10 text-center">
                     <p className="text-gray-400 text-sm">Nenhum serviço no catálogo.</p>
                     <button onClick={abrirNovoCatalog} className="mt-3 text-sm font-bold text-brand-600 hover:underline">+ Cadastrar primeiro serviço</button>
@@ -1099,13 +1070,13 @@ export default function OperacionalPetPage() {
 
           {/* Mobile: cards */}
           <div className="md:hidden divide-y divide-gray-50">
-            {catalog.length === 0 && (
+            {catalogList.items.length === 0 && (
               <div className="p-8 text-center">
                 <p className="text-gray-400 text-sm">Nenhum serviço no catálogo.</p>
                 <button onClick={abrirNovoCatalog} className="mt-3 text-sm font-bold text-brand-600 hover:underline">+ Cadastrar primeiro serviço</button>
               </div>
             )}
-            {catalog.map(c => (
+            {catalogList.items.map(c => (
               <div key={c.id} className="p-4 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900">{c.nome}</p>
@@ -1136,25 +1107,25 @@ export default function OperacionalPetPage() {
       )}
 
       {/* ─── MODAL TUTOR ─── */}
-      {modalTutor && (
+      {tutorsList.modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
-            <h2 className="text-xl font-bold mb-4">{selectedTutor ? 'Editar Tutor' : 'Novo Tutor'}</h2>
-            <form onSubmit={salvarTutor} className="space-y-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.nome} onChange={e => setFormTutor({...formTutor, nome: e.target.value})} /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.telefone} onChange={e => setFormTutor({...formTutor, telefone: e.target.value})} /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.email} onChange={e => setFormTutor({...formTutor, email: e.target.value})} /></div>
+            <h2 className="text-xl font-bold mb-4">{tutorsList.editing ? 'Editar Tutor' : 'Novo Tutor'}</h2>
+            <form onSubmit={(e) => { e.preventDefault(); void tutorsList.handleSave(); }} className="space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.nome} onChange={e => tutorsList.setForm({...tutorsList.form, nome: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.telefone} onChange={e => tutorsList.setForm({...tutorsList.form, telefone: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.email} onChange={e => tutorsList.setForm({...tutorsList.form, email: e.target.value})} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.endereco} onChange={e => setFormTutor({...formTutor, endereco: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.bairro} onChange={e => setFormTutor({...formTutor, bairro: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.endereco} onChange={e => tutorsList.setForm({...tutorsList.form, endereco: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.bairro} onChange={e => tutorsList.setForm({...tutorsList.form, bairro: e.target.value})} /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.cidade} onChange={e => setFormTutor({...formTutor, cidade: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">CEP</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.cep} onChange={e => setFormTutor({...formTutor, cep: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.cidade} onChange={e => tutorsList.setForm({...tutorsList.form, cidade: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">CEP</label><input type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.cep} onChange={e => tutorsList.setForm({...tutorsList.form, cep: e.target.value})} /></div>
               </div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Observações</label><textarea rows={2} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formTutor.observacoes} onChange={e => setFormTutor({...formTutor, observacoes: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Observações</label><textarea rows={2} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={tutorsList.form.observacoes} onChange={e => tutorsList.setForm({...tutorsList.form, observacoes: e.target.value})} /></div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalTutor(false)} className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancelar</button>
+                <button type="button" onClick={() => tutorsList.closeModal()} className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancelar</button>
                 <button type="submit" className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-md">Salvar</button>
               </div>
             </form>
@@ -1172,7 +1143,7 @@ export default function OperacionalPetPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tutor</label>
                 <select required className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formPet.tutorId} onChange={e => setFormPet({...formPet, tutorId: e.target.value})}>
                   <option value="">Selecione...</option>
-                  {tutors.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  {tutorsList.items.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1212,28 +1183,28 @@ export default function OperacionalPetPage() {
       )}
 
       {/* ─── MODAL CATÁLOGO ─── */}
-      {modalCatalog && (
+      {catalogList.modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-none">
-            <h2 className="text-xl font-bold mb-4">{selectedCatalog ? 'Editar Serviço' : 'Novo Serviço'}</h2>
-            <form onSubmit={salvarCatalog} className="space-y-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.nome} onChange={e => setFormCatalog({...formCatalog, nome: e.target.value})} /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label><textarea rows={2} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.descricao} onChange={e => setFormCatalog({...formCatalog, descricao: e.target.value})} /></div>
+            <h2 className="text-xl font-bold mb-4">{catalogList.editing ? 'Editar Serviço' : 'Novo Serviço'}</h2>
+            <form onSubmit={(e) => { e.preventDefault(); void catalogList.handleSave(); }} className="space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label><input required type="text" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={catalogList.form.nome} onChange={e => catalogList.setForm({...catalogList.form, nome: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label><textarea rows={2} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={catalogList.form.descricao} onChange={e => catalogList.setForm({...catalogList.form, descricao: e.target.value})} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Preço (R$) *</label><input required type="number" step="0.01" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={formCatalog.preco} onChange={e => setFormCatalog({...formCatalog, preco: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Preço (R$) *</label><input required type="number" step="0.01" className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2" value={catalogList.form.preco} onChange={e => catalogList.setForm({...catalogList.form, preco: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                  <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formCatalog.categoria} onChange={e => setFormCatalog({...formCatalog, categoria: e.target.value})}>
+                  <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={catalogList.form.categoria} onChange={e => catalogList.setForm({...catalogList.form, categoria: e.target.value})}>
                     <option value="BANHO">Banho</option><option value="TOSA">Tosa</option><option value="BANHO_E_TOSA">Banho & Tosa</option><option value="HOSPEDAGEM">Hospedagem</option><option value="VETERINARIO">Veterinário</option><option value="OUTRO">Outro</option>
                   </select>
                 </div>
               </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Duração</label>
-                <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={formCatalog.tipoDuracao} onChange={e => setFormCatalog({...formCatalog, tipoDuracao: e.target.value})}>
+                <select className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 bg-white" value={catalogList.form.tipoDuracao} onChange={e => catalogList.setForm({...catalogList.form, tipoDuracao: e.target.value})}>
                   <option value="INDETERMINADO">Indeterminado</option><option value="FIXO">Valor Fixo</option><option value="DIARIA">Por Diária</option><option value="HORA">Por Hora</option><option value="SEMANAL">Semanal</option><option value="MENSAL">Mensal</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalCatalog(false)} className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancelar</button>
+                <button type="button" onClick={() => catalogList.closeModal()} className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancelar</button>
                 <button type="submit" className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-md">Salvar</button>
               </div>
             </form>
@@ -1265,7 +1236,7 @@ export default function OperacionalPetPage() {
                   <p className="text-xs text-brand-600 font-medium">
                     {(() => {
                       const dias = Math.max(1, Math.ceil((new Date(formOrder.dataSaida).getTime() - new Date(formOrder.dataEntrada).getTime()) / (1000 * 60 * 60 * 24)));
-                      const hosp = formOrder.items.find((it: ServiceOrderItem) => catalog.find(c => c.id === it.catalogItemId)?.tipoDuracao === 'DIARIA');
+                      const hosp = formOrder.items.find((it: ServiceOrderItem) => catalogList.items.find(c => c.id === it.catalogItemId)?.tipoDuracao === 'DIARIA');
                       const preco = hosp?.precoUnitario ? Number(hosp.precoUnitario) : null;
                       return preco ? `${dias} diária(s) × ${formatBRL(preco)} = ${formatBRL(dias * preco)} — quantidade auto-preenchida na hospedagem` : `${dias} diária(s)`;
                     })()}
@@ -1281,7 +1252,7 @@ export default function OperacionalPetPage() {
                       <div className="flex-1">
                         <select required className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 bg-white" value={item.catalogItemId} onChange={e => updateOrderItem(idx, 'catalogItemId', e.target.value)}>
                           <option value="">Selecione...</option>
-                          {catalog.map(c => <option key={c.id} value={c.id}>{c.nome} - {formatBRL(Number(c.preco))}</option>)}
+                          {catalogList.items.map(c => <option key={c.id} value={c.id}>{c.nome} - {formatBRL(Number(c.preco))}</option>)}
                         </select>
                       </div>
                       <div className="w-20"><input type="number" min="1" step="1" className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2" value={item.quantidade} onChange={e => updateOrderItem(idx, 'quantidade', e.target.value)} /></div>
@@ -1290,7 +1261,7 @@ export default function OperacionalPetPage() {
                   ))}
                 </div>
                 {formOrder.items.some((item: ServiceOrderItem) => {
-                  const tipo = catalog.find(c => c.id === item.catalogItemId)?.tipoDuracao;
+                  const tipo = catalogList.items.find(c => c.id === item.catalogItemId)?.tipoDuracao;
                   return tipo && tipo !== 'DIARIA';
                 }) && !editingOrderId && (
                   <div className="bg-brand-50 border border-brand-100 rounded-lg p-3">
@@ -1421,7 +1392,7 @@ export default function OperacionalPetPage() {
                       <div key={o.id} className="py-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-gray-900">
-                            {new Date(o.dataEntrada).toLocaleDateString('pt-BR')}
+                            {formatDateBR(o.dataEntrada)}
                             <span className="text-gray-400 font-normal"> • {o.items?.map(i => i.catalog?.nome).filter(Boolean).join(', ') || '-'}</span>
                           </p>
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${STATUS_CORES[o.status] || 'bg-gray-100 text-gray-600'}`}>{STATUS_OS[o.status] || o.status}</span>
@@ -1465,9 +1436,9 @@ export default function OperacionalPetPage() {
                             <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle ${v.tipo === 'VERMIFUGO' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{v.tipo === 'VERMIFUGO' ? 'Vermífugo' : 'Vacina'}</span>
                           </p>
                           <p className="text-xs text-gray-400">
-                            {v.dose ? `${v.dose} • ` : ''}Aplicada em {new Date(v.dataAplicacao).toLocaleDateString('pt-BR')}
+                            {v.dose ? `${v.dose} • ` : ''}Aplicada em {formatDateBR(v.dataAplicacao)}
                             {v.proximaDose && (
-                              <span className={atrasada ? ' text-red-600 font-semibold' : ''}> • Próxima: {new Date(v.proximaDose).toLocaleDateString('pt-BR')}{atrasada ? ' (atrasada)' : ''}</span>
+                              <span className={atrasada ? ' text-red-600 font-semibold' : ''}> • Próxima: {formatDateBR(v.proximaDose)}{atrasada ? ' (atrasada)' : ''}</span>
                             )}
                           </p>
                         </div>
@@ -1499,7 +1470,7 @@ export default function OperacionalPetPage() {
                       <div key={w.id} className="py-2.5 flex items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-bold text-gray-900">{Number(w.pesoKg).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</p>
-                          <p className="text-xs text-gray-400">{new Date(w.dataPesagem).toLocaleDateString('pt-BR')}</p>
+                          <p className="text-xs text-gray-400">{formatDateBR(w.dataPesagem)}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {diff !== null && diff !== 0 && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const IconZap = ({ className = 'w-7 h-7' }: { className?: string }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">

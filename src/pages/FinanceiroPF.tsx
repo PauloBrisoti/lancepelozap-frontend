@@ -2,6 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { fetchApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import { ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { formatDateBR } from '../lib/dates';
+import { Modal } from '../components/Modal';
+import { useModal } from '../hooks/useModal';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
 
 interface Category {
   id: string; nome: string; tipo: string; icone: string; cor: string;
@@ -36,21 +41,12 @@ const toDT = (dateStr: string) => {
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toISOString();
 };
 
-const fmtBRL = (n: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-
 export function FinanceiroPF() {
-  const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('TODOS');
-  const [showForm, setShowForm] = useState(false);
+  const modal = useModal();
   const [filterMes, setFilterMes] = useState(String(new Date().getMonth() + 1));
   const [filterAno, setFilterAno] = useState(String(new Date().getFullYear()));
-  const [saldoAcumulado, setSaldoAcumulado] = useState(0);
-  const [saldosAcumuladosPorConta, setSaldosAcumuladosPorConta] = useState<{ id: string; nome: string; saldo: number }[]>([]);
 
   const INITIAL_FORM = {
     id: '', tipo: 'ENTRADA' as 'ENTRADA' | 'SAIDA', valor: '', descricao: '',
@@ -59,18 +55,30 @@ export function FinanceiroPF() {
   };
   const [formTx, setFormTx] = useState(INITIAL_FORM);
 
-  const carregarDados = async () => {
-    try {
-      const [cats, wts] = await Promise.all([
-        fetchApi('/personal/categories'),
-        fetchApi('/personal/wallets').catch(() => []),
-      ]);
-      setCategories(cats ?? []);
-      setWallets(wts ?? []);
-    } catch (error) {
-      console.error('carregarDados error:', error);
-    }
-  };
+  const { data: categories = [], refetch: refetchDados } = useApiQuery<Category[]>(
+    ['personal', 'categories'],
+    '/personal/categories',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: wallets = [] } = useApiQuery<Wallet[]>(
+    ['personal', 'wallets'],
+    '/personal/wallets',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: txsData, isLoading, refetch: refetchTx } = useApiQuery<Transaction[]>(
+    ['personal', 'transactions', filterMes, filterAno],
+    `/personal/transactions?mes=${filterMes}&ano=${filterAno}`,
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
+  const { data: dash } = useApiQuery<any>(
+    ['personal', 'dashboard', filterMes, filterAno],
+    `/personal/dashboard?mes=${filterMes}&ano=${filterAno}`,
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
+
+  const transactions = Array.isArray(txsData) ? txsData : [];
+  const saldoAcumulado = dash?.saldoAcumulado ?? 0;
+  const saldosAcumuladosPorConta: { id: string; nome: string; saldo: number }[] = dash?.saldosAcumuladosPorConta ?? [];
 
   const entradasMes = useMemo(() =>
     transactions.filter(t => t.tipo === 'ENTRADA').reduce((acc, t) => acc + Number(t.valor), 0),
@@ -98,25 +106,6 @@ export function FinanceiroPF() {
     return Array.from(map.values());
   }, [transactions]);
 
-  const carregarTransacoes = async () => {
-    try {
-      const q = `?mes=${filterMes}&ano=${filterAno}`;
-      const [txs, dash] = await Promise.all([
-        fetchApi<Transaction[]>(`/personal/transactions${q}`),
-        fetchApi<any>(`/personal/dashboard${q}`).catch(() => null),
-      ]);
-      setTransactions(Array.isArray(txs) ? txs : []);
-      if (dash) {
-        setSaldoAcumulado(dash.saldoAcumulado ?? 0);
-        setSaldosAcumuladosPorConta(dash.saldosAcumuladosPorConta ?? []);
-      }
-    } catch {
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchApi<{ billingCycleStartDay: number }>('/personal/cycle-config')
       .then(cfg => {
@@ -134,14 +123,6 @@ export function FinanceiroPF() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  useEffect(() => {
-    carregarTransacoes();
-  }, [filterMes, filterAno]);
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,9 +147,9 @@ export function FinanceiroPF() {
       } else {
         await fetchApi('/personal/transactions', { method: 'POST', body: JSON.stringify(payload) });
       }
-      setShowForm(false);
+      modal.closeModal();
       setFormTx(INITIAL_FORM);
-      await Promise.all([carregarDados(), carregarTransacoes()]);
+      await Promise.all([refetchDados(), refetchTx()]);
       toast.success(formTx.id ? 'Atualizado!' : 'Lançamento criado!');
     } catch (error) {
       toast.error((error as Error).message || 'Erro ao salvar');
@@ -190,7 +171,7 @@ export function FinanceiroPF() {
       parcelas: '',
       observacoes: '',
     });
-    setShowForm(true);
+    modal.openModal();
   };
 
   const openEdit = (tx: Transaction) => {
@@ -209,7 +190,7 @@ export function FinanceiroPF() {
       parcelas: tx.parcelas ? String(tx.parcelas) : '',
       observacoes: tx.observacoes || '',
     });
-    setShowForm(true);
+    modal.openModal();
   };
 
   const categoriasFiltradas = categories.filter(c => c.tipo === formTx.tipo);
@@ -221,7 +202,7 @@ export function FinanceiroPF() {
       tx.category?.nome?.toLowerCase().includes(search.toLowerCase());
   });
 
-  if (loading) {
+  if (isLoading) {
     return <div className="p-8 text-gray-500">Carregando financeiro pessoal...</div>;
   }
 
@@ -244,16 +225,16 @@ export function FinanceiroPF() {
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
           <span className="font-semibold text-blue-600">Saldo Consolidado</span>
           <p className={`text-2xl font-bold mt-2 ${saldoAcumulado >= 0 ? 'text-gray-900' : 'text-red-700'}`}>
-            {fmtBRL(saldoAcumulado)}
+            {formatBRL(saldoAcumulado)}
           </p>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-green-500">
           <span className="font-semibold text-green-600">Entradas</span>
-          <p className="text-2xl font-bold text-green-700 mt-2">{fmtBRL(entradasMes)}</p>
+          <p className="text-2xl font-bold text-green-700 mt-2">{formatBRL(entradasMes)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500">
           <span className="font-semibold text-red-600">Saídas</span>
-          <p className="text-2xl font-bold text-red-700 mt-2">{fmtBRL(saidasMes)}</p>
+          <p className="text-2xl font-bold text-red-700 mt-2">{formatBRL(saidasMes)}</p>
         </div>
       </div>
 
@@ -271,7 +252,7 @@ export function FinanceiroPF() {
                   {isCC ? '💳 Fatura - ' : ''}{w.nome}
                 </p>
                 <p className={`text-xl font-bold ${isCC ? 'text-red-700' : w.saldo >= 0 ? 'text-gray-900' : 'text-red-700'}`}>
-                  {fmtBRL(w.saldo)}
+                  {formatBRL(w.saldo)}
                 </p>
               </div>
             );
@@ -324,7 +305,7 @@ export function FinanceiroPF() {
             {filtered.map(tx => (
               <tr key={tx.id} className="border-b last:border-0 hover:bg-gray-50">
                 <td className="p-4 text-sm text-gray-600">
-                  {new Date(tx.data).toLocaleDateString('pt-BR')}
+                  {formatDateBR(tx.data)}
                 </td>
                 <td className="p-4">
                   {tx.tipo === 'ENTRADA' ? (
@@ -365,162 +346,158 @@ export function FinanceiroPF() {
       </div>
 
       {/* Modal de lançamento */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-lg">F</div>
-              <h2 className="text-xl font-bold text-gray-900">{formTx.id ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
-              <button type="button" onClick={() => { setShowForm(false); setFormTx(INITIAL_FORM); }} className="ml-auto p-1 text-gray-400 hover:text-gray-600 transition-colors" title="Fechar">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <form onSubmit={handleSalvar} className="space-y-4">
-              {/* Tipo */}
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setFormTx(f => ({ ...f, tipo: 'ENTRADA', categoryId: '' }))}
-                  className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 font-bold transition-all ${formTx.tipo === 'ENTRADA' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'}`}>
-                  <ArrowUpCircle className="w-5 h-5" /> Entrada
-                </button>
-                <button type="button" onClick={() => setFormTx(f => ({ ...f, tipo: 'SAIDA', categoryId: '' }))}
-                  className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 font-bold transition-all ${formTx.tipo === 'SAIDA' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'}`}>
-                  <ArrowDownCircle className="w-5 h-5" /> Saída
-                </button>
-              </div>
-
-              {/* Descrição */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-                <input type="text" required placeholder="Descrição do lançamento"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  value={formTx.descricao}
-                  onChange={e => setFormTx(f => ({ ...f, descricao: e.target.value }))} />
-              </div>
-
-              {/* Valor */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
-                <input type="number" step="0.01" min="0.01" required placeholder="R$ 0,00"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-right font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  value={formTx.valor}
-                  onChange={e => setFormTx(f => ({ ...f, valor: e.target.value }))} />
-              </div>
-
-              {/* Datas lado a lado */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Vencimento</label>
-                  <input type="date" required
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    value={formTx.dataVencimento}
-                    onChange={e => setFormTx(f => ({ ...f, dataVencimento: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Competência</label>
-                  <input type="date"
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    value={formTx.dataCompetencia}
-                    onChange={e => setFormTx(f => ({ ...f, dataCompetencia: e.target.value }))} />
-                </div>
-              </div>
-
-              {/* Categoria */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                <select required
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  value={formTx.categoryId}
-                  onChange={e => setFormTx(f => ({ ...f, categoryId: e.target.value }))}>
-                  <option value="">Selecione...</option>
-                  {categoriasFiltradas.map(c => (
-                    <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Conta + Forma de Pagamento lado a lado */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
-                  <select className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    value={formTx.walletId}
-                    onChange={e => setFormTx(f => ({ ...f, walletId: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {(wallets.length > 0 ? wallets : saldosPorConta).map(w => (
-                      <option key={w.id} value={w.id}>{w.icone || '🏦'} {w.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
-                  <select className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    value={formTx.formaPagamento}
-                    onChange={e => setFormTx(f => ({ ...f, formaPagamento: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {FORMAS_PAGAMENTO.map(fp => (
-                      <option key={fp.value} value={fp.value}>{fp.icon} {fp.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Recorrente / Parcelado */}
-              <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Lançamento Recorrente</span>
-                  <p className="text-xs text-gray-400">Repete-se todos os meses</p>
-                </div>
-                <button type="button" onClick={() => setFormTx(f => ({ ...f, recorrente: !f.recorrente, parcelas: f.recorrente ? '' : f.parcelas }))}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${formTx.recorrente ? 'bg-brand-500' : 'bg-gray-300'}`}>
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${formTx.recorrente ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-
-              {formTx.recorrente && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Parcelas (deixe 1 ou vazio para recorrente sem fim)</label>
-                  <input type="number" min="1" placeholder="Ex: 12"
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    value={formTx.parcelas}
-                    onChange={e => setFormTx(f => ({ ...f, parcelas: e.target.value }))} />
-                </div>
-              )}
-
-              {/* Observações */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-                <textarea rows={2} placeholder="Informações adicionais..."
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                  value={formTx.observacoes}
-                  onChange={e => setFormTx(f => ({ ...f, observacoes: e.target.value }))} />
-              </div>
-
-              {/* Pago toggle */}
-              <div className="flex items-center justify-between py-2 px-1">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Pago</span>
-                  <p className="text-xs text-gray-400">Marque se o pagamento já foi realizado</p>
-                </div>
-                <button type="button" onClick={() => setFormTx(f => ({ ...f, pago: !f.pago }))}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${formTx.pago ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${formTx.pago ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => { setShowForm(false); setFormTx(INITIAL_FORM); }}
-                  className="flex-1 border-2 border-gray-300 text-gray-600 py-3 rounded-xl font-semibold transition-colors text-sm hover:bg-gray-50">
-                  Cancelar
-                </button>
-                <button type="submit"
-                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 text-sm">
-                  {formTx.id ? 'Salvar Alterações' : 'Criar Lançamento'} <span className="text-lg">✓</span>
-                </button>
-              </div>
-            </form>
-          </div>
+      <Modal open={modal.open} onClose={() => { modal.closeModal(); setFormTx(INITIAL_FORM); }} size="md">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-lg">F</div>
+          <h2 className="text-xl font-bold text-gray-900">{formTx.id ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+          <button type="button" onClick={() => { modal.closeModal(); setFormTx(INITIAL_FORM); }} className="ml-auto p-1 text-gray-400 hover:text-gray-600 transition-colors" title="Fechar">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
-      )}
+        <form onSubmit={handleSalvar} className="space-y-4">
+          {/* Tipo */}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setFormTx(f => ({ ...f, tipo: 'ENTRADA', categoryId: '' }))}
+              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 font-bold transition-all ${formTx.tipo === 'ENTRADA' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'}`}>
+              <ArrowUpCircle className="w-5 h-5" /> Entrada
+            </button>
+            <button type="button" onClick={() => setFormTx(f => ({ ...f, tipo: 'SAIDA', categoryId: '' }))}
+              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 font-bold transition-all ${formTx.tipo === 'SAIDA' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'}`}>
+              <ArrowDownCircle className="w-5 h-5" /> Saída
+            </button>
+          </div>
+
+          {/* Descrição */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+            <input type="text" required placeholder="Descrição do lançamento"
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={formTx.descricao}
+              onChange={e => setFormTx(f => ({ ...f, descricao: e.target.value }))} />
+          </div>
+
+          {/* Valor */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
+            <input type="number" step="0.01" min="0.01" required placeholder="R$ 0,00"
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-right font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={formTx.valor}
+              onChange={e => setFormTx(f => ({ ...f, valor: e.target.value }))} />
+          </div>
+
+          {/* Datas lado a lado */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Data de Vencimento</label>
+              <input type="date" required
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={formTx.dataVencimento}
+                onChange={e => setFormTx(f => ({ ...f, dataVencimento: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Data de Competência</label>
+              <input type="date"
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={formTx.dataCompetencia}
+                onChange={e => setFormTx(f => ({ ...f, dataCompetencia: e.target.value }))} />
+            </div>
+          </div>
+
+          {/* Categoria */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+            <select required
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={formTx.categoryId}
+              onChange={e => setFormTx(f => ({ ...f, categoryId: e.target.value }))}>
+              <option value="">Selecione...</option>
+              {categoriasFiltradas.map(c => (
+                <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Conta + Forma de Pagamento lado a lado */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
+              <select className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={formTx.walletId}
+                onChange={e => setFormTx(f => ({ ...f, walletId: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {(wallets.length > 0 ? wallets : saldosPorConta).map(w => (
+                  <option key={w.id} value={w.id}>{w.icone || '🏦'} {w.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
+              <select className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={formTx.formaPagamento}
+                onChange={e => setFormTx(f => ({ ...f, formaPagamento: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {FORMAS_PAGAMENTO.map(fp => (
+                  <option key={fp.value} value={fp.value}>{fp.icon} {fp.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Recorrente / Parcelado */}
+          <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
+            <div>
+              <span className="text-sm font-medium text-gray-700">Lançamento Recorrente</span>
+              <p className="text-xs text-gray-400">Repete-se todos os meses</p>
+            </div>
+            <button type="button" onClick={() => setFormTx(f => ({ ...f, recorrente: !f.recorrente, parcelas: f.recorrente ? '' : f.parcelas }))}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${formTx.recorrente ? 'bg-brand-500' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${formTx.recorrente ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {formTx.recorrente && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Parcelas (deixe 1 ou vazio para recorrente sem fim)</label>
+              <input type="number" min="1" placeholder="Ex: 12"
+                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={formTx.parcelas}
+                onChange={e => setFormTx(f => ({ ...f, parcelas: e.target.value }))} />
+            </div>
+          )}
+
+          {/* Observações */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+            <textarea rows={2} placeholder="Informações adicionais..."
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              value={formTx.observacoes}
+              onChange={e => setFormTx(f => ({ ...f, observacoes: e.target.value }))} />
+          </div>
+
+          {/* Pago toggle */}
+          <div className="flex items-center justify-between py-2 px-1">
+            <div>
+              <span className="text-sm font-medium text-gray-700">Pago</span>
+              <p className="text-xs text-gray-400">Marque se o pagamento já foi realizado</p>
+            </div>
+            <button type="button" onClick={() => setFormTx(f => ({ ...f, pago: !f.pago }))}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${formTx.pago ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${formTx.pago ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          <div className="flex gap-3">
+            <button type="button" onClick={() => { modal.closeModal(); setFormTx(INITIAL_FORM); }}
+              className="flex-1 border-2 border-gray-300 text-gray-600 py-3 rounded-xl font-semibold transition-colors text-sm hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button type="submit"
+              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 text-sm">
+              {formTx.id ? 'Salvar Alterações' : 'Criar Lançamento'} <span className="text-lg">✓</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

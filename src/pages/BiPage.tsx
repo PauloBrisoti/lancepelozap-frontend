@@ -1,50 +1,35 @@
-import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
-import { fetchApi } from '../lib/api';
+import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
+import { todayLocalDate } from '../utils/format';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 const CORES_PIE = ['#059669', '#10b981', '#6ee7b7', '#34d399', '#047857', '#065f46', '#a7f3d0', '#022c22'];
 
 export function BiPage() {
   const [activeTab, setActiveTab] = useState('comparativo');
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<Record<string, unknown>>({});
 
-  // Filtros de data
-  const hoje = new Date().toISOString().slice(0, 10);
-  const mesPassado = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10);
-  const mesAtual = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  // Filtros de data (fuso local, não UTC)
+  const hoje = todayLocalDate();
+  const now = new Date();
+  const mesPassado = todayLocalDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const mesAtual = todayLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
 
   const [periodo1, setPeriodo1] = useState({ inicio: mesAtual, fim: hoje });
   const [periodo2, setPeriodo2] = useState({ inicio: mesPassado, fim: mesAtual });
 
-  const carregar = async (tab: string) => {
-    setLoading(true);
-    try {
-      if (tab === 'comparativo') {
-        const res = await fetchApi(`/bi/comparativo?dataInicio1=${periodo1.inicio}&dataFim1=${periodo1.fim}&dataInicio2=${periodo2.inicio}&dataFim2=${periodo2.fim}`);
-        setData({ comparativo: res });
-      } else if (tab === 'abc') {
-        const res = await fetchApi(`/bi/abc-curve?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`);
-        setData({ abc: res });
-      } else if (tab === 'rentabilidade') {
-        const res = await fetchApi(`/bi/profitability?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`);
-        setData({ rentabilidade: res });
-      } else if (tab === 'heatmap') {
-        const res = await fetchApi(`/bi/sales-heatmap?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`);
-        setData({ heatmap: res });
-      } else if (tab === 'topflop') {
-        const res = await fetchApi(`/bi/top-flop?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`);
-        setData({ topflop: res });
-      }
-    } catch (error) {
-      toast.error('Erro ao carregar dados');
-    } finally {
-      setLoading(false);
-    }
+  const endpoints: Record<string, string> = {
+    comparativo: `/bi/comparativo?dataInicio1=${periodo1.inicio}&dataFim1=${periodo1.fim}&dataInicio2=${periodo2.inicio}&dataFim2=${periodo2.fim}`,
+    abc: `/bi/abc-curve?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`,
+    rentabilidade: `/bi/profitability?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`,
+    heatmap: `/bi/sales-heatmap?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`,
+    topflop: `/bi/top-flop?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`,
   };
 
-  useEffect(() => { carregar(activeTab); }, [activeTab]);
+  const { data, isLoading, refetch } = useApiQuery<unknown>(
+    ['bi', activeTab, periodo1.inicio, periodo1.fim, periodo2.inicio, periodo2.fim],
+    endpoints[activeTab],
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
 
   const abas = [
     { key: 'comparativo', label: 'Comparativo' },
@@ -67,15 +52,15 @@ export function BiPage() {
         ))}
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center text-gray-400 py-20">Carregando...</div>
       ) : (
         <>
-          {activeTab === 'comparativo' && <ComparativoTab data={data.comparativo as { periodo1: ComparativoData; periodo2: ComparativoData }} periodo1={periodo1} periodo2={periodo2} setPeriodo1={setPeriodo1} setPeriodo2={setPeriodo2} onRecarregar={() => carregar('comparativo')} />}
-          {activeTab === 'abc' && <AbcTab data={data.abc as { resumo: { a: number; b: number; c: number; receitaA: number; receitaB: number; receitaC: number }; totalReceita: number; produtos: AbcProduto[] }} />}
-          {activeTab === 'rentabilidade' && <RentabilidadeTab data={data.rentabilidade as { total: { receita: number; custo: number; margem: number }; categorias: RentabilidadeCategoria[] }} />}
-          {activeTab === 'heatmap' && <HeatmapTab data={data.heatmap as { porHora: HeatmapHora[]; porDiaSemana: HeatmapItem[]; porDiaMes: { dia: string; vendas: number }[] }} />}
-          {activeTab === 'topflop' && <TopFlopTab data={data.topflop as { top: TopFlopItem[]; flop: TopFlopItem[] }} />}
+          {activeTab === 'comparativo' && <ComparativoTab data={data as { periodo1: ComparativoData; periodo2: ComparativoData } | null} periodo1={periodo1} periodo2={periodo2} setPeriodo1={setPeriodo1} setPeriodo2={setPeriodo2} onRecarregar={() => refetch()} />}
+          {activeTab === 'abc' && <AbcTab data={data as { resumo: { a: number; b: number; c: number; receitaA: number; receitaB: number; receitaC: number }; totalReceita: number; produtos: AbcProduto[] } | null} />}
+          {activeTab === 'rentabilidade' && <RentabilidadeTab data={data as { total: { receita: number; custo: number; margem: number }; categorias: RentabilidadeCategoria[] } | null} />}
+          {activeTab === 'heatmap' && <HeatmapTab data={data as { porHora: HeatmapHora[]; porDiaSemana: HeatmapItem[]; porDiaMes: { dia: string; vendas: number }[] } | null} />}
+          {activeTab === 'topflop' && <TopFlopTab data={data as { top: TopFlopItem[]; flop: TopFlopItem[] } | null} />}
         </>
       )}
     </div>

@@ -1,25 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';import { fetchApi } from '../lib/api';
-import { toast } from 'react-hot-toast';
+import { useState } from 'react';import { toast } from 'react-hot-toast';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import type { Sale, Product, Receivable, FinancialTransaction, SaleItem, DashboardMetrics } from '../types/api';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
+import { REPORT_PAYMENT_LABELS } from '../utils/domainMaps';
 
 type Tab = 'vendas' | 'financeiro' | 'estoque';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
-const METHOD_LABELS: Record<string, string> = {
-  PIX: 'Pix',
-  DINHEIRO: 'Dinheiro',
-  CREDIARIO: 'Crediário',
-  CARTAO_DEBITO: 'Cartão de Débito',
-  CARTAO_CREDITO_AVISTA: 'Crédito à Vista',
-  CARTAO_CREDITO_PARCELADO: 'Crédito Parcelado',
-  OUTROS: 'Outros',
-};
 
 const PERIOD_LABELS: Record<string, string> = {
   '7d': 'Últimos 7 dias',
@@ -48,10 +41,6 @@ interface SalesSummary {
   previous: { total: number; valor: number; ticketMedio: number; itens: number } | null;
 }
 
-function formatCurrency(v: number | string) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v));
-}
-
 function formatNumber(v: number | string) {
   return new Intl.NumberFormat('pt-BR').format(Number(v));
 }
@@ -76,19 +65,49 @@ export function RelatoriosPage() {
   const [period, setPeriod] = useState('30d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const [dashboard, setDashboard] = useState<DashboardMetrics | null>(null);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [dre, setDre] = useState<DreData | null>(null);
-  const [summary, setSummary] = useState<SalesSummary | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-  const [receivables, setReceivables] = useState<Receivable[]>([]);
 
   // Guarda as datas "aplicadas" — só muda com preset ou clique em Atualizar
   const [appliedStart, setAppliedStart] = useState(format(subDays(today, 30), 'yyyy-MM-dd'));
   const [appliedEnd, setAppliedEnd] = useState(format(today, 'yyyy-MM-dd'));
+
+  const query = appliedStart && appliedEnd ? `?startDate=${appliedStart}&endDate=${appliedEnd}` : '';
+  const prev = appliedStart && appliedEnd ? calcPrevRange(appliedStart, appliedEnd) : null;
+
+  const { data: dashboard, isLoading } = useApiQuery<DashboardMetrics | null>(
+    ['reports', 'dashboard', appliedStart, appliedEnd],
+    `/dashboard/tenant${query}`,
+    { staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
+  const { data: sales = [] } = useApiQuery<Sale[]>(
+    ['reports', 'sales', appliedStart, appliedEnd],
+    `/sales${query}`,
+    { staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
+  const { data: dre } = useApiQuery<DreData | null>(
+    ['reports', 'dre', appliedStart, appliedEnd],
+    `/finance/dre${query}`,
+    { staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
+  const { data: products = [] } = useApiQuery<Product[]>(
+    ['reports', 'products'],
+    '/products',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: summary } = useApiQuery<SalesSummary | null>(
+    ['reports', 'summary', appliedStart, appliedEnd],
+    prev ? `/sales/summary${query}&prevStartDate=${prev.prevStart}&prevEndDate=${prev.prevEnd}` : '',
+    { enabled: !!prev, staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
+  const { data: transactions = [] } = useApiQuery<FinancialTransaction[]>(
+    ['reports', 'transactions', appliedStart, appliedEnd],
+    `/finance/transactions${query}`,
+    { enabled: tab === 'financeiro', staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
+  const { data: receivables = [] } = useApiQuery<Receivable[]>(
+    ['reports', 'receivables', appliedStart, appliedEnd],
+    '/finance/receivables',
+    { enabled: tab === 'financeiro', staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
+  );
 
   function applyPeriod(p: string) {
     setPeriod(p);
@@ -118,39 +137,6 @@ export function RelatoriosPage() {
     }
   }
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const query = appliedStart && appliedEnd ? `?startDate=${appliedStart}&endDate=${appliedEnd}` : '';
-    const prev = appliedStart && appliedEnd ? calcPrevRange(appliedStart, appliedEnd) : null;
-    try {
-      const [dash, salesData, dreData, prods, summ] = await Promise.all([
-        fetchApi(`/dashboard/tenant${query}`).catch(() => null),
-        fetchApi(`/sales${query}`).catch(() => []),
-        fetchApi(`/finance/dre${query}`).catch(() => null),
-        fetchApi('/products').catch(() => []),
-        prev ? fetchApi(`/sales/summary${query}&prevStartDate=${prev.prevStart}&prevEndDate=${prev.prevEnd}`).catch(() => null) : Promise.resolve(null),
-      ]);
-      setDashboard(dash);
-      setSales(Array.isArray(salesData) ? salesData : []);
-      setDre(dreData);
-      setProducts(Array.isArray(prods) ? prods : []);
-      setSummary(summ);
-
-      if (tab === 'financeiro') {
-        const [txns, recs] = await Promise.all([
-          fetchApi(`/finance/transactions${query}`).catch(() => []),
-          fetchApi('/finance/receivables').catch(() => []),
-        ]);
-        setTransactions(Array.isArray(txns) ? txns : []);
-        setReceivables(Array.isArray(recs) ? recs : []);
-      }
-    } catch { toast.error('Erro ao carregar relatórios'); }
-    finally { setLoading(false); }
-  }, [appliedStart, appliedEnd, tab]);
-
-  // Efeito inicial e quando tab ou datas aplicadas mudam
-  useEffect(() => { if (appliedStart && appliedEnd) loadData(); }, [appliedStart, appliedEnd, tab, loadData]);
-
   // Sales by payment method
   const salesByMethod = sales.reduce((acc: Record<string, { count: number; total: number }>, s: Sale) => {
     const method = s.formaPagamento || 'OUTROS';
@@ -160,7 +146,7 @@ export function RelatoriosPage() {
     return acc;
   }, {});
 
-  const paymentChartData = Object.entries(salesByMethod).map(([name, data]) => ({ name: METHOD_LABELS[name] || name, value: data.total, count: data.count }));
+  const paymentChartData = Object.entries(salesByMethod).map(([name, data]) => ({ name: REPORT_PAYMENT_LABELS[name] || name, value: data.total, count: data.count }));
 
   // Sales by day (ordenado cronologicamente)
   const salesByDay: Record<string, number> = {};
@@ -192,8 +178,8 @@ export function RelatoriosPage() {
   const salesTableData = sales.map((s: Sale) => [
     format(new Date(s.dataVenda), 'dd/MM/yyyy'),
     s.customer?.nomeCompleto || 'Avulso',
-    METHOD_LABELS[s.formaPagamento] || s.formaPagamento,
-    formatCurrency(s.valorTotalLiquido),
+    REPORT_PAYMENT_LABELS[s.formaPagamento] || s.formaPagamento,
+    formatBRL(s.valorTotalLiquido),
     s.user?.nome || '-',
   ]);
 
@@ -227,8 +213,8 @@ export function RelatoriosPage() {
     const totalValor = sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0);
     const ticketMedio = totalVendas > 0 ? totalValor / totalVendas : 0;
     doc.text(`Total de Vendas: ${totalVendas}`, 14, 44);
-    doc.text(`Valor Total: ${formatCurrency(totalValor)}`, 14, 50);
-    doc.text(`Ticket Médio: ${formatCurrency(ticketMedio)}`, 14, 56);
+    doc.text(`Valor Total: ${formatBRL(totalValor)}`, 14, 50);
+    doc.text(`Ticket Médio: ${formatBRL(ticketMedio)}`, 14, 56);
 
     autoTable(doc, {
       startY: 62,
@@ -259,7 +245,7 @@ export function RelatoriosPage() {
       sheet.addRow({
         data: format(new Date(s.dataVenda), 'dd/MM/yyyy'),
         cliente: s.customer?.nomeCompleto || 'Avulso',
-        pagamento: METHOD_LABELS[s.formaPagamento] || s.formaPagamento,
+        pagamento: REPORT_PAYMENT_LABELS[s.formaPagamento] || s.formaPagamento,
         valor: Number(s.valorTotalLiquido),
         status: s.status,
         vendedor: s.user?.nome || '-',
@@ -270,17 +256,17 @@ export function RelatoriosPage() {
   };
 
   const dreRows = dre ? [
-    ['Receita Bruta', formatCurrency(dre.receitaBruta || 0)],
-    ['Descontos', `- ${formatCurrency(dre.deducoes?.descontos || 0)}`],
-    ['Taxas de Gateway', `- ${formatCurrency(dre.deducoes?.taxasGateway || 0)}`],
-    ['Receita Líquida', formatCurrency(dre.receitaLiquida || 0)],
-    ['Impostos Estimados', `- ${formatCurrency(dre.impostosEstimados || 0)}`],
-    ['CMV (Custo das Vendas)', `- ${formatCurrency(dre.custos?.cmv || 0)}`],
-    ['Lucro Bruto', formatCurrency(dre.lucroBruto || 0)],
+    ['Receita Bruta', formatBRL(dre.receitaBruta || 0)],
+    ['Descontos', `- ${formatBRL(dre.deducoes?.descontos || 0)}`],
+    ['Taxas de Gateway', `- ${formatBRL(dre.deducoes?.taxasGateway || 0)}`],
+    ['Receita Líquida', formatBRL(dre.receitaLiquida || 0)],
+    ['CMV (Custo das Vendas)', `- ${formatBRL(dre.custos?.cmv || 0)}`],
+    ['Lucro Bruto', formatBRL(dre.lucroBruto || 0)],
     ['Margem Bruta', `${(dre.margemLucroBruto || 0).toFixed(1)}%`],
-    ['Despesas Operacionais', `- ${formatCurrency(dre.despesas?.total || 0)}`],
-    ...(dre.despesas?.detalhamento || []).map((d: { categoria: string; valor: number }) => [`  ${d.categoria}`, `- ${formatCurrency(d.valor)}`]),
-    ['Lucro Líquido', formatCurrency(dre.lucroLiquido || 0)],
+    ['Impostos Estimados', `- ${formatBRL(dre.impostosEstimados || 0)}`],
+    ['Despesas Operacionais', `- ${formatBRL(dre.despesas?.total || 0)}`],
+    ...(dre.despesas?.detalhamento || []).map((d: { categoria: string; valor: number }) => [`  ${d.categoria}`, `- ${formatBRL(d.valor)}`]),
+    ['Lucro Líquido', formatBRL(dre.lucroLiquido || 0)],
     ['Margem Líquida', `${(dre.margemLucroLiquido || 0).toFixed(1)}%`],
   ] : [];
 
@@ -353,8 +339,8 @@ export function RelatoriosPage() {
         p.nome,
         p.category?.nome || '-',
         formatNumber(Number(p.qtdEstoqueAtual) || 0),
-        formatCurrency(Number(p.precoCusto) || 0),
-        formatCurrency((Number(p.qtdEstoqueAtual) || 0) * (Number(p.precoCusto) || 0)),
+        formatBRL(Number(p.precoCusto) || 0),
+        formatBRL((Number(p.qtdEstoqueAtual) || 0) * (Number(p.precoCusto) || 0)),
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [99, 102, 241] },
@@ -421,7 +407,7 @@ export function RelatoriosPage() {
     </div>
   );
 
-  if (loading && !dashboard) {
+  if (isLoading && !dashboard) {
     return <div className="p-6 max-w-7xl mx-auto"><div className="text-center py-20 text-gray-500">Carregando relatórios...</div></div>;
   }
 
@@ -467,8 +453,8 @@ export function RelatoriosPage() {
               const delta = (atual: number, anterior: number) => anterior === 0 ? (atual === 0 ? 0 : 100) : ((atual - anterior) / anterior) * 100;
               const cards = [
                 { label: 'Total de Vendas', value: formatNumber(sales.length), atual: sales.length, prev: prev?.total ?? null },
-                { label: 'Faturamento', value: formatCurrency(sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0)), atual: sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0), prev: prev?.valor ?? null },
-                { label: 'Ticket Médio', value: sales.length > 0 ? formatCurrency(sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0) / sales.length) : 'R$ 0,00', atual: sales.length > 0 ? sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0) / sales.length : 0, prev: prev?.ticketMedio ?? null },
+                { label: 'Faturamento', value: formatBRL(sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0)), atual: sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0), prev: prev?.valor ?? null },
+                { label: 'Ticket Médio', value: sales.length > 0 ? formatBRL(sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0) / sales.length) : 'R$ 0,00', atual: sales.length > 0 ? sales.reduce((acc, s) => acc + Number(s.valorTotalLiquido), 0) / sales.length : 0, prev: prev?.ticketMedio ?? null },
                 { label: 'Itens Vendidos', value: formatNumber(sales.reduce((acc, s) => acc + (s.saleItems || []).reduce((a: number, i: SaleItem) => a + Number(i.quantidade), 0), 0)), atual: sales.reduce((acc, s) => acc + (s.saleItems || []).reduce((a: number, i: SaleItem) => a + Number(i.quantidade), 0), 0), prev: prev?.itens ?? null },
               ];
               return cards.map(card => {
@@ -497,7 +483,7 @@ export function RelatoriosPage() {
                   <BarChart data={salesChartData}>
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v}`} />
-                    <Tooltip formatter={(value: unknown) => formatCurrency(Number(value))} />
+                    <Tooltip formatter={(value: unknown) => formatBRL(Number(value))} />
                     <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -517,7 +503,7 @@ export function RelatoriosPage() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: unknown) => formatCurrency(Number(value))} />
+                    <Tooltip formatter={(value: unknown) => formatBRL(Number(value))} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -547,7 +533,7 @@ export function RelatoriosPage() {
                         <td className="py-2 text-gray-400">{i + 1}</td>
                         <td className="py-2 text-gray-800">{p.nome}</td>
                         <td className="py-2 text-right text-gray-700">{formatNumber(p.qtd)}</td>
-                        <td className="py-2 text-right font-medium">{formatCurrency(p.total)}</td>
+                        <td className="py-2 text-right font-medium">{formatBRL(p.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -580,9 +566,9 @@ export function RelatoriosPage() {
                       <td className="px-4 py-3 text-gray-600">{format(new Date(s.dataVenda), 'dd/MM/yy HH:mm')}</td>
                       <td className="px-4 py-3 text-gray-800">{s.customer?.nomeCompleto || 'Avulso'}</td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{METHOD_LABELS[s.formaPagamento] || s.formaPagamento}</span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{REPORT_PAYMENT_LABELS[s.formaPagamento] || s.formaPagamento}</span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(s.valorTotalLiquido)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatBRL(s.valorTotalLiquido)}</td>
                       <td className="px-4 py-3 text-gray-600">{s.user?.nome || '-'}</td>
                     </tr>
                   ))}
@@ -609,53 +595,53 @@ export function RelatoriosPage() {
                 <tbody className="divide-y divide-gray-100">
                   <tr className="hover:bg-gray-50">
                     <td className="py-3 text-gray-700">Receita Bruta</td>
-                    <td className="py-3 text-right font-semibold text-gray-900">{formatCurrency(dre.receitaBruta || 0)}</td>
+                    <td className="py-3 text-right font-semibold text-gray-900">{formatBRL(dre.receitaBruta || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50 text-gray-500">
                     <td className="py-2 pl-6">Descontos</td>
-                    <td className="py-2 text-right">- {formatCurrency(dre.deducoes?.descontos || 0)}</td>
+                    <td className="py-2 text-right">- {formatBRL(dre.deducoes?.descontos || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50 text-gray-500">
                     <td className="py-2 pl-6">Taxas de Gateway</td>
-                    <td className="py-2 text-right">- {formatCurrency(dre.deducoes?.taxasGateway || 0)}</td>
+                    <td className="py-2 text-right">- {formatBRL(dre.deducoes?.taxasGateway || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50 border-t border-gray-200">
                     <td className="py-3 text-gray-700 font-medium">Receita Líquida</td>
-                    <td className="py-3 text-right font-bold">{formatCurrency(dre.receitaLiquida || 0)}</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50 text-gray-500">
-                    <td className="py-2 pl-6">Impostos Estimados{dre.aliquotaImposto ? ` (${dre.aliquotaImposto}%)` : ' (não configurado)'}</td>
-                    <td className="py-2 text-right">- {formatCurrency(dre.impostosEstimados || 0)}</td>
+                    <td className="py-3 text-right font-bold">{formatBRL(dre.receitaLiquida || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50">
                     <td className="py-3 text-gray-700">CMV (Custo das Vendas)</td>
-                    <td className="py-3 text-right">- {formatCurrency(dre.custos?.cmv || 0)}</td>
+                    <td className="py-3 text-right">- {formatBRL(dre.custos?.cmv || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50 border-t border-gray-200">
                     <td className="py-3 text-gray-700 font-medium">Lucro Bruto</td>
-                    <td className="py-3 text-right font-bold text-green-600">{formatCurrency(dre.lucroBruto || 0)}</td>
+                    <td className="py-3 text-right font-bold text-green-600">{formatBRL(dre.lucroBruto || 0)}</td>
                   </tr>
                   <tr className="hover:bg-gray-50 text-xs text-gray-400">
                     <td className="py-1 pl-6">Margem Bruta</td>
                     <td className="py-1 text-right">{dre.margemLucroBruto?.toFixed(1)}%</td>
                   </tr>
                   <tr className="hover:bg-gray-50">
+                    <td className="py-3 text-gray-700">Impostos Estimados{dre.aliquotaImposto ? ` (${dre.aliquotaImposto}%)` : ' (não configurado)'}</td>
+                    <td className="py-3 text-right">- {formatBRL(dre.impostosEstimados || 0)}</td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
                     <td className="py-3 text-gray-700">Despesas Operacionais</td>
-                    <td className="py-3 text-right">- {formatCurrency(dre.despesas?.total || 0)}</td>
+                    <td className="py-3 text-right">- {formatBRL(dre.despesas?.total || 0)}</td>
                   </tr>
 
                   {/* Expense breakdown */}
                   {(dre.despesas?.detalhamento || []).map((d: { categoria: string; valor: number }, i: number) => (
                     <tr key={i} className="hover:bg-gray-50 text-gray-500">
                       <td className="py-1 pl-6 text-xs">{d.categoria}</td>
-                      <td className="py-1 text-right text-xs">{formatCurrency(d.valor)}</td>
+                      <td className="py-1 text-right text-xs">{formatBRL(d.valor)}</td>
                     </tr>
                   ))}
 
                   <tr className="hover:bg-gray-50 border-t-2 border-gray-300">
                     <td className="py-4 text-gray-900 text-base font-bold">Lucro Líquido</td>
                     <td className={`py-4 text-right text-base font-bold ${(dre.lucroLiquido || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(dre.lucroLiquido || 0)}
+                      {formatBRL(dre.lucroLiquido || 0)}
                     </td>
                   </tr>
                   <tr className="text-xs text-gray-400">
@@ -680,9 +666,9 @@ export function RelatoriosPage() {
                     const totalVencido = vencidos.reduce((acc: number, r: Receivable) => acc + (r.saldoRestante ?? (Number(r.valorParcela) - Number(r.valorJaPago || 0))), 0);
                     return (
                       <>
-                        <div className="flex justify-between text-sm"><span className="text-gray-600">Total a Receber</span><span className="font-bold">{formatCurrency(totalPendente)}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-red-600">Vencidos</span><span className="font-bold text-red-600">{formatCurrency(totalVencido)} ({vencidos.length})</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-gray-600">A Vencer</span><span className="font-bold">{formatCurrency(totalPendente - totalVencido)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-gray-600">Total a Receber</span><span className="font-bold">{formatBRL(totalPendente)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-red-600">Vencidos</span><span className="font-bold text-red-600">{formatBRL(totalVencido)} ({vencidos.length})</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-gray-600">A Vencer</span><span className="font-bold">{formatBRL(totalPendente - totalVencido)}</span></div>
                       </>
                     );
                   })()}
@@ -699,7 +685,7 @@ export function RelatoriosPage() {
                   <div key={t.id} className="flex justify-between text-sm py-1 border-b border-gray-50">
                     <span className="text-gray-600 truncate max-w-[180px]">{t.descricao || t.categoria}</span>
                     <span className={t.tipo === 'ENTRADA' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                      {t.tipo === 'ENTRADA' ? '+' : '-'}{formatCurrency(t.valor)}
+                      {t.tipo === 'ENTRADA' ? '+' : '-'}{formatBRL(t.valor)}
                     </span>
                   </div>
                 ))}
@@ -775,8 +761,8 @@ export function RelatoriosPage() {
                         <td className="px-4 py-3 text-gray-800">{p.nome}</td>
                         <td className="px-4 py-3 text-gray-500">{p.category?.nome || '-'}</td>
                         <td className={`px-4 py-3 text-right font-medium ${qtd <= Number(p.estoqueMinimo) ? 'text-red-600' : 'text-gray-700'}`}>{formatNumber(qtd)}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(custo)}</td>
-                        <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(imobilizado)}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{formatBRL(custo)}</td>
+                        <td className="px-4 py-3 text-right text-gray-700">{formatBRL(imobilizado)}</td>
                       </tr>
                     );
                   })}

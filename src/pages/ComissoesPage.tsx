@@ -1,16 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, Fragment } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-
-function formatCurrency(v: number | string) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v));
-}
+import { useAuth } from '../context/AuthContext';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
 
 interface SellerSummary {
   userId: string;
   nome: string;
   totalPendente: number;
+}
+
+interface PendingSale {
+  saleId: string;
+  dataVenda: string;
+  valorTotal: number;
+  formaPagamento: string;
+  totalComissao: number;
+  itens: { id: string; produto: string; quantidade: number; comissao: number }[];
 }
 
 interface Payment {
@@ -25,41 +33,52 @@ interface Payment {
 }
 
 export function ComissoesPage() {
-  const [totalPendente, setTotalPendente] = useState(0);
-  const [totalPagoMes, setTotalPagoMes] = useState(0);
-  const [porVendedor, setPorVendedor] = useState<SellerSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, activeWorkspace } = useAuth();
+  // VENDEDOR/CAIXA vê apenas as próprias comissões (sem pagar, sem ver outros vendedores)
+  const isRestricted = !user?.isImpersonating && activeWorkspace
+    ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role)
+    : false;
+
   const [paying, setPaying] = useState<string | null>(null);
+  const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
+  const [pendingDetail, setPendingDetail] = useState<PendingSale[] | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Payment history
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [paymentPage, setPaymentPage] = useState(1);
-  const [paymentTotal, setPaymentTotal] = useState(0);
   const paymentLimit = 20;
 
-  useEffect(() => { loadSummary(); }, []);
-  useEffect(() => { loadPayments(); }, [paymentPage]);
+  const { data: summary, isLoading, refetch: refetchSummary } = useApiQuery<any>(
+    ['commission', 'summary'],
+    '/commission-payments/summary',
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
+  const { data: paymentsRes, isLoading: paymentsLoading, refetch: refetchPayments } = useApiQuery<{ data: Payment[]; total: number }>(
+    ['commission', 'payments', paymentPage],
+    `/commission-payments?page=${paymentPage}&limit=${paymentLimit}`,
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
-  const loadSummary = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchApi('/commission-payments/summary');
-      setTotalPendente(data.totalPendente || 0);
-      setTotalPagoMes(data.totalPagoEsteMes || 0);
-      setPorVendedor(data.porVendedor || []);
-    } catch { toast.error('Erro ao carregar resumo'); }
-    finally { setLoading(false); }
-  };
+  const totalPendente = summary?.totalPendente ?? 0;
+  const totalPagoMes = summary?.totalPagoEsteMes ?? 0;
+  const porVendedor: SellerSummary[] = summary?.porVendedor ?? [];
+  const payments: Payment[] = paymentsRes?.data ?? [];
+  const paymentTotal = paymentsRes?.total ?? 0;
 
-  const loadPayments = async () => {
+  const toggleDetail = async (sellerId: string) => {
+    if (expandedSeller === sellerId) {
+      setExpandedSeller(null);
+      setPendingDetail(null);
+      return;
+    }
+    setExpandedSeller(sellerId);
+    setPendingDetail(null);
+    setDetailLoading(true);
     try {
-      setPaymentsLoading(true);
-      const data = await fetchApi(`/commission-payments?page=${paymentPage}&limit=${paymentLimit}`);
-      setPayments(data.data || []);
-      setPaymentTotal(data.total || 0);
-    } catch { toast.error('Erro ao carregar histórico'); }
-    finally { setPaymentsLoading(false); }
+      const data = await fetchApi<{ vendas: PendingSale[] }>(`/commission-payments/pending?sellerId=${sellerId}`);
+      setPendingDetail(data.vendas || []);
+    } catch { toast.error('Erro ao carregar detalhe'); }
+    finally { setDetailLoading(false); }
   };
 
   const handlePay = async (sellerId: string, nome: string) => {
@@ -71,8 +90,8 @@ export function ComissoesPage() {
         body: JSON.stringify({ sellerId }),
       });
       toast.success(`Comissões de ${nome} pagas!`);
-      loadSummary();
-      loadPayments();
+      refetchSummary();
+      refetchPayments();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao pagar comissões'); }
     finally { setPaying(null); }
   };
@@ -81,9 +100,11 @@ export function ComissoesPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Comissões</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        {isRestricted ? 'Minhas Comissões' : 'Comissões'}
+      </h1>
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-gray-500">Carregando...</div>
       ) : (
         <>
@@ -91,15 +112,16 @@ export function ComissoesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <p className="text-sm text-gray-500 mb-1">Total Pendente</p>
-              <p className="text-3xl font-bold text-amber-600">{formatCurrency(totalPendente)}</p>
+              <p className="text-3xl font-bold text-amber-600">{formatBRL(totalPendente)}</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <p className="text-sm text-gray-500 mb-1">Pago Este Mês</p>
-              <p className="text-3xl font-bold text-green-600">{formatCurrency(totalPagoMes)}</p>
+              <p className="text-3xl font-bold text-green-600">{formatBRL(totalPagoMes)}</p>
             </div>
           </div>
 
-          {/* Per Seller */}
+          {/* Per Seller (apenas gestores) */}
+          {!isRestricted && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Comissões por Vendedor</h2>
@@ -117,24 +139,74 @@ export function ComissoesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {porVendedor.map((s) => (
-                    <tr key={s.userId} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{s.nome}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-amber-600">{formatCurrency(s.totalPendente)}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handlePay(s.userId, s.nome)}
-                          disabled={paying === s.userId}
-                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium disabled:opacity-50"
-                        >
-                          {paying === s.userId ? 'Pagando...' : 'Pagar Comissões'}
-                        </button>
-                      </td>
-                    </tr>
+                    <Fragment key={s.userId}>
+                      <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleDetail(s.userId)}>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                          <button onClick={(e) => { e.stopPropagation(); toggleDetail(s.userId); }} className="mr-2 text-gray-400 hover:text-brand-600 inline-flex items-center">
+                            {expandedSeller === s.userId ? '▾' : '▸'}
+                          </button>
+                          {s.nome}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-amber-600">{formatBRL(s.totalPendente)}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handlePay(s.userId, s.nome); }}
+                            disabled={paying === s.userId}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium disabled:opacity-50"
+                          >
+                            {paying === s.userId ? 'Pagando...' : 'Pagar Comissões'}
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedSeller === s.userId && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-4 bg-gray-50/70">
+                            {detailLoading ? (
+                              <p className="text-center text-gray-400 text-sm py-3">Carregando detalhe...</p>
+                            ) : !pendingDetail || pendingDetail.length === 0 ? (
+                              <p className="text-center text-gray-400 text-sm py-3">Nenhuma venda com comissão pendente</p>
+                            ) : (
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <th className="px-4 py-2">Data</th>
+                                    <th className="px-4 py-2">Venda</th>
+                                    <th className="px-4 py-2">Itens</th>
+                                    <th className="px-4 py-2 text-right">Total Venda</th>
+                                    <th className="px-4 py-2 text-right">Comissão</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {pendingDetail.map(v => (
+                                    <tr key={v.saleId}>
+                                      <td className="px-4 py-2 text-gray-600">{format(new Date(v.dataVenda), 'dd/MM/yy HH:mm')}</td>
+                                      <td className="px-4 py-2 text-gray-900">{v.formaPagamento}</td>
+                                      <td className="px-4 py-2 text-gray-600">
+                                        <div className="flex flex-col gap-0.5">
+                                          {v.itens.map(i => (
+                                            <span key={i.id} className="text-xs">
+                                              <span className="font-medium">{Number(i.quantidade)}x</span> {i.produto}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2 text-right text-gray-900">{formatBRL(v.valorTotal)}</td>
+                                      <td className="px-4 py-2 text-right font-semibold text-amber-600">{formatBRL(v.totalComissao)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
+          )}
         </>
       )}
 
@@ -162,7 +234,7 @@ export function ComissoesPage() {
                 {payments.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.user.nome}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-green-600">{formatCurrency(p.totalValor)}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-green-600">{formatBRL(p.totalValor)}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {format(new Date(p.dataInicio), 'dd/MM/yy')} - {format(new Date(p.dataFim), 'dd/MM/yy')}
                     </td>
