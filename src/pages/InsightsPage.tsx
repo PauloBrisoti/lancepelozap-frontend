@@ -1,38 +1,41 @@
-import { useEffect, useState } from 'react';
-import { fetchApi } from '../lib/api';
+import { useState } from 'react';
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, CartesianGrid, Legend, Line } from 'recharts';
 import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, History, RefreshCw } from 'lucide-react';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+
+const ERROR_MESSAGES = {
+  forecast: 'Não foi possível carregar a previsão de vendas. Tente novamente mais tarde.',
+  stock: 'Não foi possível carregar as recomendações de reposição. Tente novamente mais tarde.',
+  anomalies: 'Não foi possível carregar as anomalias. Tente novamente mais tarde.',
+};
 
 export function InsightsPage() {
   const [tab, setTab] = useState<'forecast' | 'stock' | 'anomalies'>('forecast');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [forecastData, setForecastData] = useState<any>(null);
-  const [stockData, setStockData] = useState<any>(null);
-  const [anomalyData, setAnomalyData] = useState<any>(null);
 
-  function fetchTab(t: string) {
-    setLoading(true);
-    setError(null);
-    if (t === 'forecast') {
-      fetchApi('/insights/forecast')
-        .then(d => { setForecastData(d); setError(null); })
-        .catch(() => { setForecastData(null); setError('Não foi possível carregar a previsão de vendas. Tente novamente mais tarde.'); })
-        .finally(() => setLoading(false));
-    } else if (t === 'stock') {
-      fetchApi('/insights/stock-recommendations')
-        .then(d => { setStockData(d); setError(null); })
-        .catch(() => { setStockData(null); setError('Não foi possível carregar as recomendações de reposição. Tente novamente mais tarde.'); })
-        .finally(() => setLoading(false));
-    } else {
-      fetchApi('/insights/anomalies')
-        .then(d => { setAnomalyData(d); setError(null); })
-        .catch(() => { setAnomalyData(null); setError('Não foi possível carregar as anomalias. Tente novamente mais tarde.'); })
-        .finally(() => setLoading(false));
-    }
-  }
+  const { data: forecastData, isLoading: forecastLoading, error: forecastError, refetch: refetchForecast } = useApiQuery<any>(
+    ['insights', 'forecast'],
+    '/insights/forecast',
+    { enabled: tab === 'forecast', staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: stockData, isLoading: stockLoading, error: stockError, refetch: refetchStock } = useApiQuery<any>(
+    ['insights', 'stock'],
+    '/insights/stock-recommendations',
+    { enabled: tab === 'stock', staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: anomalyData, isLoading: anomalyLoading, error: anomalyError, refetch: refetchAnomalies } = useApiQuery<any>(
+    ['insights', 'anomalies'],
+    '/insights/anomalies',
+    { enabled: tab === 'anomalies', staleTime: STALE_TIMES.NORMAL }
+  );
 
-  useEffect(() => { fetchTab(tab); }, [tab]);
+  const loading = tab === 'forecast' ? forecastLoading : tab === 'stock' ? stockLoading : anomalyLoading;
+  const error = tab === 'forecast' ? (forecastError ? ERROR_MESSAGES.forecast : null) : tab === 'stock' ? (stockError ? ERROR_MESSAGES.stock : null) : (anomalyError ? ERROR_MESSAGES.anomalies : null);
+
+  const refetchTab = () => {
+    if (tab === 'forecast') refetchForecast();
+    else if (tab === 'stock') refetchStock();
+    else refetchAnomalies();
+  };
 
   const fmt = (v: number) => `R$ ${v.toFixed(2)}`;
   const fmtQtd = (v: number) => v.toFixed(1);
@@ -59,7 +62,7 @@ export function InsightsPage() {
         <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-red-300" />
         <h3 className="text-lg font-semibold text-red-700 mb-2">Ops! Algo deu errado</h3>
         <p className="text-sm text-gray-400 max-w-md mx-auto mb-4">{message}</p>
-        <button onClick={() => fetchTab(tab)} className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
+        <button onClick={refetchTab} className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
           <RefreshCw className="w-4 h-4" /> Tentar novamente
         </button>
       </div>

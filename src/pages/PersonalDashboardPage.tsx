@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { fetchApi } from '../lib/api';
 import { format } from 'date-fns';
-import { formatInTimeZone } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
+import { useTransactionForm } from '../hooks/useTransactionForm';
+import { formatBRL } from '../utils/format';
 
-const TZ = 'America/Sao_Paulo';
-const fmtTZ = (iso: string, pattern: string) => formatInTimeZone(iso, TZ, pattern, { locale: ptBR });
 const toUTCDate = (dateStr: string) => {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toISOString();
@@ -23,6 +22,7 @@ import {
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend } from 'recharts';
 import { toast } from 'react-hot-toast';
 import { SkeletonTable } from '../components/LoadingSkeleton';
+import { Modal } from '../components/Modal';
 
 interface Category {
   id: string; nome: string; tipo: string; icone: string; cor: string;
@@ -66,10 +66,6 @@ const HEALTH = {
 
 const CHART_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'];
 
-function formatBRL(n: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-}
-
 function cycleLabel(mes: number, ano: number, startDay: number): string {
   if (startDay === 1) {
     return format(new Date(ano, mes - 1), "MMMM 'de' yyyy", { locale: ptBR });
@@ -92,22 +88,12 @@ export function PersonalDashboardPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'dashboard' | 'transactions' | 'budgets'>('dashboard');
-  const [showModal, setShowModal] = useState(false);
-  const [modalTipo, setModalTipo] = useState<'ENTRADA' | 'SAIDA'>('SAIDA');
-  const [formCategoryId, setFormCategoryId] = useState('');
-  const [formWalletId, setFormWalletId] = useState('');
-  const [formValor, setFormValor] = useState('');
-  const [formDescricao, setFormDescricao] = useState('');
-  const now = new Date();
-  const [formData, setFormData] = useState(format(now, 'yyyy-MM-dd'));
-  const [formHora, setFormHora] = useState(format(now, 'HH:mm'));
-  const [, setFormDataOriginal] = useState('');
+  const formTx = useTransactionForm();
   const [budgetForm, setBudgetForm] = useState<Record<string, string>>({});
   const [focusCategoryId, setFocusCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [catForm, setCatForm] = useState({ nome: '', tipo: 'SAIDA' as 'ENTRADA' | 'SAIDA', icone: '💵' });
-  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const urlPeriod = searchParams.get('period');
   let initialMes = new Date().getMonth() + 1;
@@ -203,36 +189,18 @@ export function PersonalDashboardPage() {
   }
 
   function openEditTransaction(tx: Transaction) {
-    setEditingTx(tx);
-    setFormDataOriginal(tx.data);
-    setModalTipo(tx.tipo as 'ENTRADA' | 'SAIDA');
-    setFormCategoryId(tx.categoryId);
-    setFormWalletId(tx.walletId || '');
-    setFormValor(formatBRL(Number(tx.valor)).replace('R$ ', ''));
-    setFormDescricao(tx.descricao || '');
-    setFormData(fmtTZ(tx.data, 'yyyy-MM-dd'));
-    setFormHora(fmtTZ(tx.data, 'HH:mm'));
-    setShowModal(true);
+    formTx.openEdit(tx);
   }
 
   function openNewTransaction(tipo: 'ENTRADA' | 'SAIDA') {
-    const agora = new Date();
-    setEditingTx(null);
-    setModalTipo(tipo);
-    setFormCategoryId('');
-    setFormWalletId('');
-    setFormValor('');
-    setFormDescricao('');
-    setFormData(format(agora, 'yyyy-MM-dd'));
-    setFormHora(format(agora, 'HH:mm'));
-    setShowModal(true);
+    formTx.openNew(tipo);
   }
 
   async function handleSave() {
     const errors: string[] = [];
-    if (!formCategoryId) errors.push('Categoria é obrigatória');
-    if (!formValor || parseBRLraw(formValor) <= 0) errors.push('Valor deve ser maior que zero');
-    if (!formData) errors.push('Data é obrigatória');
+    if (!formTx.categoryId) errors.push('Categoria é obrigatória');
+    if (!formTx.valor || parseBRLraw(formTx.valor) <= 0) errors.push('Valor deve ser maior que zero');
+    if (!formTx.data) errors.push('Data é obrigatória');
 
     if (errors.length > 0) {
       toast.error(errors.join('. '));
@@ -241,20 +209,19 @@ export function PersonalDashboardPage() {
 
     setSaving(true);
     try {
-      const method = editingTx ? 'PUT' : 'POST';
-      const url = editingTx ? `/personal/transactions/${editingTx.id}` : '/personal/transactions';
+      const method = formTx.editingTx ? 'PUT' : 'POST';
+      const url = formTx.editingTx ? `/personal/transactions/${formTx.editingTx.id}` : '/personal/transactions';
       const body: Record<string, unknown> = {
-        categoryId: formCategoryId,
-        walletId: formWalletId || null,
-        tipo: modalTipo,
-        valor: parseBRLraw(formValor),
-        descricao: formDescricao,
-        dataVencimento: toUTCDate(formData),
+        categoryId: formTx.categoryId,
+        walletId: formTx.walletId || null,
+        tipo: formTx.tipo,
+        valor: parseBRLraw(formTx.valor),
+        descricao: formTx.descricao,
+        dataVencimento: toUTCDate(formTx.data),
       };
       await fetchApi(url, { method, body: JSON.stringify(body) });
-      toast.success(editingTx ? 'Transação atualizada!' : (modalTipo === 'ENTRADA' ? 'Ganho registrado!' : 'Gasto registrado!'));
-      setShowModal(false);
-      setEditingTx(null);
+      toast.success(formTx.editingTx ? 'Transação atualizada!' : (formTx.tipo === 'ENTRADA' ? 'Ganho registrado!' : 'Gasto registrado!'));
+      formTx.close();
       await loadAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar transação');
@@ -830,24 +797,23 @@ export function PersonalDashboardPage() {
       )}
 
       {/* ==================== MODAL NOVA TRANSAÇÃO ==================== */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className={`px-6 py-5 flex justify-between items-center ${modalTipo === 'ENTRADA' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+      {formTx.open && (
+        <Modal open={formTx.open} onClose={formTx.close} size="sm" className="shadow-2xl overflow-hidden">
+          {/* Header */}
+            <div className={`px-6 py-5 flex justify-between items-center ${formTx.tipo === 'ENTRADA' ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <div className="flex items-center gap-3">
-                {modalTipo === 'ENTRADA'
+                {formTx.tipo === 'ENTRADA'
                   ? <ArrowUpCircle className="w-6 h-6 text-emerald-600" />
                   : <ArrowDownCircle className="w-6 h-6 text-red-600" />
                 }
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">
-                    {editingTx ? 'Editar Transação' : (modalTipo === 'ENTRADA' ? 'Novo Ganho' : 'Novo Gasto')}
+                    {formTx.editingTx ? 'Editar Transação' : (formTx.tipo === 'ENTRADA' ? 'Novo Ganho' : 'Novo Gasto')}
                   </h3>
-                  <p className="text-xs text-gray-500">{editingTx ? 'Corrija os dados da transação' : 'Registre uma movimentação financeira'}</p>
+                  <p className="text-xs text-gray-500">{formTx.editingTx ? 'Corrija os dados da transação' : 'Registre uma movimentação financeira'}</p>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+              <button onClick={() => formTx.close()} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -857,9 +823,9 @@ export function PersonalDashboardPage() {
               {/* Tipo selector */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setModalTipo('ENTRADA')}
+                  onClick={() => formTx.setTipo('ENTRADA')}
                   className={`flex-1 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                    modalTipo === 'ENTRADA'
+                    formTx.tipo === 'ENTRADA'
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                       : 'border-gray-200 text-gray-500 hover:border-gray-300'
                   }`}
@@ -867,9 +833,9 @@ export function PersonalDashboardPage() {
                   <ArrowUpCircle className="w-4 h-4 inline mr-1.5" /> Ganho
                 </button>
                 <button
-                  onClick={() => setModalTipo('SAIDA')}
+                  onClick={() => formTx.setTipo('SAIDA')}
                   className={`flex-1 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                    modalTipo === 'SAIDA'
+                    formTx.tipo === 'SAIDA'
                       ? 'border-red-500 bg-red-50 text-red-700'
                       : 'border-gray-200 text-gray-500 hover:border-gray-300'
                   }`}
@@ -883,19 +849,19 @@ export function PersonalDashboardPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Categoria</label>
                 <select
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                  value={formCategoryId}
+                  value={formTx.categoryId}
                   onChange={e => {
                     if (e.target.value === '__new__') {
                       setShowCategoryModal(true);
-                      setCatForm(prev => ({ ...prev, tipo: modalTipo }));
-                      setFormCategoryId('');
+                      setCatForm(prev => ({ ...prev, tipo: formTx.tipo }));
+                      formTx.setField('categoryId', '');
                     } else {
-                      setFormCategoryId(e.target.value);
+                      formTx.setField('categoryId', e.target.value);
                     }
                   }}
                 >
                   <option value="">Selecione uma categoria</option>
-                  {categories.filter(c => c.tipo === modalTipo).map(c => (
+                  {categories.filter(c => c.tipo === formTx.tipo).map(c => (
                     <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
                   ))}
                   <option value="__new__" className="text-brand-600 font-medium border-t border-gray-200">➕ Criar Nova Categoria</option>
@@ -907,8 +873,8 @@ export function PersonalDashboardPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Conta de Origem/Destino</label>
                 <select
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                  value={formWalletId}
-                  onChange={e => setFormWalletId(e.target.value)}
+                  value={formTx.walletId}
+                  onChange={e => formTx.setField('walletId', e.target.value)}
                 >
                   <option value="">Selecione uma conta</option>
                   {wallets.map(w => (
@@ -927,8 +893,8 @@ export function PersonalDashboardPage() {
                     inputMode="decimal"
                     className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-lg font-bold focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
                     placeholder="0,00"
-                    value={formValor}
-                    onChange={e => setFormValor(e.target.value)}
+                    value={formTx.valor}
+                    onChange={e => formTx.setField('valor', e.target.value)}
                   />
                 </div>
               </div>
@@ -939,9 +905,9 @@ export function PersonalDashboardPage() {
                 <input
                   type="text"
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                  placeholder={modalTipo === 'ENTRADA' ? 'Ex: Salário mensal' : 'Ex: Compras do mês'}
-                  value={formDescricao}
-                  onChange={e => setFormDescricao(e.target.value)}
+                  placeholder={formTx.tipo === 'ENTRADA' ? 'Ex: Salário mensal' : 'Ex: Compras do mês'}
+                  value={formTx.descricao}
+                  onChange={e => formTx.setField('descricao', e.target.value)}
                   maxLength={120}
                 />
               </div>
@@ -953,8 +919,8 @@ export function PersonalDashboardPage() {
                   <input
                     type="date"
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                    value={formData}
-                    onChange={e => setFormData(e.target.value)}
+                    value={formTx.data}
+                    onChange={e => formTx.setField('data', e.target.value)}
                   />
                 </div>
                 <div>
@@ -962,8 +928,8 @@ export function PersonalDashboardPage() {
                   <input
                     type="time"
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                    value={formHora}
-                    onChange={e => setFormHora(e.target.value)}
+                    value={formTx.hora}
+                    onChange={e => formTx.setField('hora', e.target.value)}
                   />
                 </div>
               </div>
@@ -973,23 +939,21 @@ export function PersonalDashboardPage() {
                 onClick={handleSave}
                 disabled={saving}
                 className={`w-full py-3.5 rounded-xl text-white font-bold text-sm transition-all ${
-                  modalTipo === 'ENTRADA'
+                  formTx.tipo === 'ENTRADA'
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : 'bg-red-600 hover:bg-red-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {saving ? 'Salvando...' : `Confirmar ${modalTipo === 'ENTRADA' ? 'Ganho' : 'Gasto'}`}
+                {saving ? 'Salvando...' : `Confirmar ${formTx.tipo === 'ENTRADA' ? 'Ganho' : 'Gasto'}`}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ==================== MODAL CICLO FINANCEIRO ==================== */}
       {showCycleModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowCycleModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+        <Modal open={showCycleModal} onClose={() => setShowCycleModal(false)} size="sm" className="shadow-2xl overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">⚙️ Início do Mês Financeiro</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Seu ciclo pessoal de faturamento</p>
@@ -1027,15 +991,13 @@ export function PersonalDashboardPage() {
                 Salvar
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ==================== MODAL GERENCIAR CATEGORIAS ==================== */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowCategoryModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center shrink-0">
+        <Modal open={showCategoryModal} onClose={() => setShowCategoryModal(false)} size="md" className="shadow-2xl flex flex-col">
+          <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Gerenciar Categorias</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Crie ou remova categorias de ganhos e gastos</p>
@@ -1111,8 +1073,7 @@ export function PersonalDashboardPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

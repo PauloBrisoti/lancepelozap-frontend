@@ -2,18 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { DashboardPJPage } from './DashboardPJPage';
 
-const mockFetch = vi.fn();
-vi.mock('../lib/api', () => ({
-  fetchApi: (...args: any[]) => mockFetch(...args),
+const mockRefetch = vi.fn();
+
+let mockQueryState: { data: unknown; isLoading: boolean; error: Error | null } = {
+  data: null,
+  isLoading: false,
+  error: null,
+};
+
+vi.mock('../lib/query', () => ({
+  STALE_TIMES: { STATIC: 300000, NORMAL: 120000, FREQUENT: 30000, REALTIME: 10000 },
+  useApiQuery: (key: unknown[]) => {
+    if (key[1] === 'seller-performance') {
+      return { data: { sellers: [] }, isLoading: false, error: null, refetch: mockRefetch };
+    }
+    return { ...mockQueryState, refetch: mockRefetch };
+  },
 }));
 
 const mockUser = { id: 'u1', nome: 'PJ User', role: 'USER' };
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: mockUser, activeStoreId: 'store-1', activeWorkspace: { id: 'store-1', tipo: 'PJ' }, loading: false, isAuthenticated: true }),
-}));
-
-vi.mock('../hooks/useStockAlerts', () => ({
-  useStockAlerts: () => ({ count: 0, products: [] }),
 }));
 
 const consolidatedData = {
@@ -58,17 +67,18 @@ function renderPage() {
 
 describe('DashboardPJPage', () => {
   beforeEach(() => {
-    mockFetch.mockReset();
+    vi.clearAllMocks();
+    mockQueryState = { data: null, isLoading: false, error: null };
   });
 
   it('shows loading state initially', () => {
-    mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+    mockQueryState.isLoading = true;
     renderPage();
     expect(document.querySelector('.animate-spin')).toBeInTheDocument();
   });
 
   it('renders consolidated KPIs after loading', async () => {
-    mockFetch.mockResolvedValueOnce(consolidatedData);
+    mockQueryState.data = consolidatedData;
     renderPage();
 
     await waitFor(() => {
@@ -79,7 +89,7 @@ describe('DashboardPJPage', () => {
   });
 
   it('shows per-store breakdown table with headers', async () => {
-    mockFetch.mockResolvedValueOnce(consolidatedData);
+    mockQueryState.data = consolidatedData;
     renderPage();
 
     await waitFor(() => {
@@ -91,7 +101,7 @@ describe('DashboardPJPage', () => {
   });
 
   it('shows store selector with all stores', async () => {
-    mockFetch.mockResolvedValueOnce(consolidatedData);
+    mockQueryState.data = consolidatedData;
     renderPage();
 
     await waitFor(() => {
@@ -103,7 +113,7 @@ describe('DashboardPJPage', () => {
   });
 
   it('shows card metrics after data loads', async () => {
-    mockFetch.mockResolvedValueOnce(consolidatedData);
+    mockQueryState.data = consolidatedData;
     renderPage();
 
     await waitFor(() => {
@@ -113,7 +123,7 @@ describe('DashboardPJPage', () => {
   });
 
   it('handles data fetch failure gracefully', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    mockQueryState.error = new Error('Network error');
     renderPage();
 
     await waitFor(() => {
@@ -122,7 +132,7 @@ describe('DashboardPJPage', () => {
   });
 
   it('currency formatting uses pt-BR locale', async () => {
-    mockFetch.mockResolvedValueOnce(consolidatedData);
+    mockQueryState.data = consolidatedData;
     renderPage();
 
     await waitFor(() => {

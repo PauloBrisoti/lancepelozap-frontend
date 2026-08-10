@@ -1,7 +1,10 @@
 import toast from 'react-hot-toast';
+import { PAYMENT_METHOD_LABELS } from '../utils/domainMaps';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
+import { Modal } from '../components/Modal';
+import { useCrudList } from '../hooks/useCrudList';
 
 interface Tenant {
   nomeFantasia: string;
@@ -45,7 +48,9 @@ export function ConfiguracoesPage() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [twoFactorSecret, setTwoFactorSecret] = useState('');
   const [twoFactorToken, setTwoFactorToken] = useState('');
-  const [is2FAEnabled, setIs2FAEnabled] = useState(false); // fallback
+  const [disable2FASenha, setDisable2FASenha] = useState('');
+  const [disabling2FA, setDisabling2FA] = useState(false);
+  const [is2FAEnabled, setIs2FAEnabled] = useState(!!user?.twoFactorEnabled);
 
   // Profile State
   const [profileData, setProfileData] = useState({ nome: '', email: '', senhaAtual: '', novaSenha: '' });
@@ -220,6 +225,32 @@ export function ConfiguracoesPage() {
       setTwoFactorToken('');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Código inválido');
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    if (!disable2FASenha) {
+      toast.error('Informe sua senha atual para desativar o 2FA');
+      return;
+    }
+    setDisabling2FA(true);
+    try {
+      await fetchApi('/auth/2fa/disable', {
+        method: 'POST',
+        body: JSON.stringify({ senhaAtual: disable2FASenha })
+      });
+      toast.success('2FA desativado. Faça login novamente.');
+      setIs2FAEnabled(false);
+      setDisable2FASenha('');
+      setQrCodeUrl('');
+      setTwoFactorSecret('');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }, 1500);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao desativar 2FA');
+    } finally {
+      setDisabling2FA(false);
     }
   };
 
@@ -583,11 +614,30 @@ export function ConfiguracoesPage() {
             </p>
 
             {is2FAEnabled ? (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-center">
-                <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                <div>
-                  <h4 className="font-bold text-green-800">2FA Ativado</h4>
-                  <p className="text-sm text-green-700">Sua conta está protegida.</p>
+              <div className="space-y-4">
+                <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-center">
+                  <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  <div>
+                    <h4 className="font-bold text-green-800">2FA Ativado</h4>
+                    <p className="text-sm text-green-700">Sua conta está protegida.</p>
+                  </div>
+                </div>
+                <div className="border border-gray-200 p-4 rounded-xl space-y-3 max-w-xs">
+                  <p className="text-sm font-medium text-gray-900">Desativar autenticação em duas etapas</p>
+                  <input
+                    type="password"
+                    value={disable2FASenha}
+                    onChange={(e) => setDisable2FASenha(e.target.value)}
+                    placeholder="Senha atual"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
+                  <button
+                    onClick={handleDisable2FA}
+                    disabled={disabling2FA || disable2FASenha.length < 8}
+                    className="bg-rose-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-rose-700 transition disabled:opacity-50"
+                  >
+                    {disabling2FA ? 'Desativando...' : 'Desativar 2FA'}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -645,9 +695,8 @@ export function ConfiguracoesPage() {
 
       {/* MODAL USUÁRIO */}
       {modalUserAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <Modal open={modalUserAberto} onClose={() => setModalUserAberto(false)} size="sm" rounded="xl" className="overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{userForm.id ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
               <button onClick={() => setModalUserAberto(false)} className="text-gray-400 hover:text-gray-600">
                 ✕
@@ -754,15 +803,13 @@ export function ConfiguracoesPage() {
                 Salvar
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL CONFIRMAR ZERAR FATURAMENTO */}
       {resetModalAberto && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50">
+        <Modal open={resetModalAberto} onClose={() => setResetModalAberto(false)} size="sm" rounded="xl" className="overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50">
               <h3 className="text-lg font-bold text-red-800">⚠️ Zerar Faturamento</h3>
               <button onClick={() => setResetModalAberto(false)} className="text-red-500 hover:text-red-700">✕</button>
             </div>
@@ -796,8 +843,7 @@ export function ConfiguracoesPage() {
                 Confirmar Exclusão
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -815,87 +861,39 @@ interface PaymentFee {
   prazoRecebimento: number;
 }
 
-const FORMA_PAGAMENTO_LABELS: Record<string, string> = {
-  PIX: 'PIX',
-  CARTAO_CREDITO: 'Cartão Crédito',
-  CARTAO_DEBITO: 'Cartão Débito',
-  DINHEIRO: 'Dinheiro',
-  CREDIARIO: 'Crediário',
-};
+interface PaymentFeeForm {
+  formaPagamento: string;
+  parcelas: number;
+  taxaPercentual: number;
+  taxaFixa: number;
+  prazoRecebimento: number;
+}
+
 
 function PaymentFeesSection() {
-  const [fees, setFees] = useState<PaymentFee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<PaymentFee | null>(null);
-  const [form, setForm] = useState({
-    formaPagamento: 'PIX',
-    parcelas: 1,
-    taxaPercentual: 0,
-    taxaFixa: 0,
-    prazoRecebimento: 0,
-  });
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { loadFees(); }, []);
-
-  const loadFees = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi('/payment-fees');
-      setFees(data || []);
-    } catch { toast.error('Erro ao carregar taxas'); }
-    finally { setLoading(false); }
-  };
-
-  const openNew = () => {
-    setEditing(null);
-    setForm({ formaPagamento: 'PIX', parcelas: 1, taxaPercentual: 0, taxaFixa: 0, prazoRecebimento: 0 });
-    setModalOpen(true);
-  };
-
-  const openEdit = (fee: PaymentFee) => {
-    setEditing(fee);
-    setForm({
+  const {
+    items: fees, loading, saving, modalOpen, editing, form, setForm,
+    openNew, openEdit, closeModal, handleSave, handleDelete,
+  } = useCrudList<PaymentFee, PaymentFeeForm>({
+    endpoint: '/payment-fees',
+    loadList: () => fetchApi('/payment-fees'),
+    createDefault: () => ({ formaPagamento: 'PIX', parcelas: 1, taxaPercentual: 0, taxaFixa: 0, prazoRecebimento: 0 }),
+    toForm: (fee) => ({
       formaPagamento: fee.formaPagamento,
       parcelas: fee.parcelas,
       taxaPercentual: Number(fee.taxaPercentual),
       taxaFixa: Number(fee.taxaFixa),
       prazoRecebimento: Number(fee.prazoRecebimento),
-    });
-    setModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      if (editing) {
-        await fetchApi(`/payment-fees/${editing.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(form),
-        });
-        toast.success('Taxa atualizada!');
-      } else {
-        await fetchApi('/payment-fees', {
-          method: 'POST',
-          body: JSON.stringify(form),
-        });
-        toast.success('Taxa criada!');
-      }
-      setModalOpen(false);
-      loadFees();
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao salvar taxa'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Remover esta taxa?')) return;
-    try {
-      await fetchApi(`/payment-fees/${id}`, { method: 'DELETE' });
-      toast.success('Taxa removida!');
-      loadFees();
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao remover taxa'); }
-  };
+    }),
+    messages: {
+      loadError: 'Erro ao carregar taxas',
+      createSuccess: 'Taxa criada!',
+      updateSuccess: 'Taxa atualizada!',
+      deleteSuccess: 'Taxa removida!',
+      deleteConfirm: 'Remover esta taxa?',
+      saveError: 'Erro ao salvar taxa',
+    },
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -929,7 +927,7 @@ function PaymentFeesSection() {
             <tbody>
               {fees.map(fee => (
                 <tr key={fee.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3">{FORMA_PAGAMENTO_LABELS[fee.formaPagamento] || fee.formaPagamento}</td>
+                  <td className="py-3">{PAYMENT_METHOD_LABELS[fee.formaPagamento] || fee.formaPagamento}</td>
                   <td className="py-3 text-right">{fee.parcelas}x</td>
                   <td className="py-3 text-right">{Number(fee.taxaPercentual).toFixed(2)}%</td>
                   <td className="py-3 text-right">R$ {Number(fee.taxaFixa).toFixed(2)}</td>
@@ -946,11 +944,10 @@ function PaymentFeesSection() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{editing ? 'Editar Taxa' : 'Nova Taxa'}</h3>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -988,13 +985,12 @@ function PaymentFeesSection() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button onClick={closeModal} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -1018,81 +1014,46 @@ interface TeamUser {
   nome: string;
 }
 
+interface CommissionRuleForm {
+  userId: string;
+  categoryId: string;
+  percentual: number;
+}
+
 function CommissionSection() {
-  const [rules, setRules] = useState<CommissionRule[]>([]);
   const [team, setTeam] = useState<TeamUser[]>([]);
   const [categories, setCategories] = useState<{ id: string; nome: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<CommissionRule | null>(null);
-  const [form, setForm] = useState({ userId: '', categoryId: '', percentual: 0 });
-  const [saving, setSaving] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
+  const {
+    items: rules, loading, saving, modalOpen, editing, form, setForm,
+    openNew, openEdit, closeModal, handleSave, handleDelete, load,
+  } = useCrudList<CommissionRule, CommissionRuleForm>({
+    endpoint: '/commissions',
+    loadList: async () => {
       const [rulesData, teamData, catData] = await Promise.all([
         fetchApi('/commissions'),
         fetchApi('/settings/team').catch(() => []),
         fetchApi('/categories'),
       ]);
-      setRules(rulesData || []);
       setTeam(teamData || []);
       setCategories(catData || []);
-    } catch {
-      toast.error('Erro ao carregar dados');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openNew = () => {
-    setEditing(null);
-    setForm({ userId: team[0]?.id || '', categoryId: '', percentual: 0 });
-    setModalOpen(true);
-  };
-
-  const openEdit = (rule: CommissionRule) => {
-    setEditing(rule);
-    setForm({
+      return rulesData || [];
+    },
+    createDefault: () => ({ userId: team[0]?.id || '', categoryId: '', percentual: 0 }),
+    toForm: (rule) => ({
       userId: rule.userId,
       categoryId: rule.categoryId || '',
       percentual: Number(rule.percentual),
-    });
-    setModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const body = {
-        userId: form.userId,
-        categoryId: form.categoryId || null,
-        percentual: form.percentual,
-      };
-      if (editing) {
-        await fetchApi(`/commissions/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
-        toast.success('Comissão atualizada!');
-      } else {
-        await fetchApi('/commissions', { method: 'POST', body: JSON.stringify(body) });
-        toast.success('Comissão criada!');
-      }
-      setModalOpen(false);
-      loadData();
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao salvar'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Remover esta regra de comissão?')) return;
-    try {
-      await fetchApi(`/commissions/${id}`, { method: 'DELETE' });
-      toast.success('Regra removida!');
-      loadData();
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao remover'); }
-  };
+    }),
+    messages: {
+      loadError: 'Erro ao carregar dados',
+      createSuccess: 'Comissão criada!',
+      updateSuccess: 'Comissão atualizada!',
+      deleteSuccess: 'Regra removida!',
+      deleteConfirm: 'Remover esta regra de comissão?',
+      saveError: 'Erro ao salvar',
+    },
+  });
 
   const toggleActive = async (rule: CommissionRule) => {
     try {
@@ -1100,7 +1061,7 @@ function CommissionSection() {
         method: 'PUT',
         body: JSON.stringify({ ativo: !rule.ativo }),
       });
-      loadData();
+      load();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao alterar status'); }
   };
 
@@ -1155,11 +1116,10 @@ function CommissionSection() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{editing ? 'Editar Comissão' : 'Nova Comissão'}</h3>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -1185,13 +1145,12 @@ function CommissionSection() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button onClick={closeModal} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

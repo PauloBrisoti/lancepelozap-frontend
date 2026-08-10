@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchApi } from '../lib/api';
 import { TrendingUp, TrendingDown, Building2, DollarSign, Package, AlertCircle, Calendar, Landmark, PiggyBank, Wallet, AlertTriangle } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface FluxoFinanceiroMetric {
   saldoAcumulado: number;
@@ -64,8 +64,6 @@ interface ConsolidatedData {
 
 export function DashboardPJPage() {
   const { user, activeStoreId } = useAuth();
-  const [data, setData] = useState<ConsolidatedData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [period, setPeriod] = useState('30d');
   const [customStart, setCustomStart] = useState('');
@@ -86,28 +84,28 @@ export function DashboardPJPage() {
     return { start, end };
   }
 
-  useEffect(() => {
-    if (!activeStoreId) { setLoading(false); return; }
-    const { start, end } = getDateRange();
-    if (!start || !end) { setLoading(false); return; }
-    async function load() {
-      try {
-        const data = await fetchApi(`/dashboard/pj/consolidated?startDate=${start}&endDate=${end}`);
-        setData(data);
-      } catch (e) {
-        console.error('Erro ao carregar dashboard PJ (forçando dados zerados):', e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [activeStoreId, period, customStart, customEnd]);
+  const { start, end } = getDateRange();
+  const queryStr = start && end ? `?startDate=${start}&endDate=${end}` : '';
+  const enabled = !!activeStoreId && !!start && !!end;
+
+  const { data, isLoading } = useApiQuery<ConsolidatedData>(
+    ['dashboard-pj', 'consolidated', activeStoreId, period, customStart, customEnd],
+    `/dashboard/pj/consolidated${queryStr}`,
+    { enabled, staleTime: STALE_TIMES.FREQUENT }
+  );
+  const { data: sellerPerf } = useApiQuery<{ sellers: any[] }>(
+    ['dashboard-pj', 'seller-performance', activeStoreId, period, customStart, customEnd],
+    `/dashboard/pj/seller-performance${queryStr}`,
+    { enabled, staleTime: STALE_TIMES.FREQUENT }
+  );
+
+  const sellers = sellerPerf?.sellers || [];
 
   if (user?.role === 'SUPER_ADMIN' && !user?.isImpersonating) {
     return <div className="p-6 text-gray-500 text-center mt-12 text-lg">Use o Dashboard Principal para visão de administrador.</div>;
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 text-gray-500 flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500" />
@@ -446,7 +444,39 @@ export function DashboardPJPage() {
         />
       </div>
 
-      <h2 className="text-lg font-bold text-gray-800 mb-4">Desempenho por Loja</h2>
+      <h2 className="text-lg font-bold text-gray-800 mb-4">Performance por Vendedor</h2>
+      {sellers.length === 0 ? (
+        <p className="text-gray-400 text-sm py-6 text-center bg-white rounded-xl border border-gray-200">Nenhuma venda no período</p>
+      ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full bg-white rounded-xl shadow-sm border border-gray-200">
+          <thead>
+            <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50">
+              <th className="px-4 py-3">Vendedor</th>
+              <th className="px-4 py-3 text-right">Vendas</th>
+              <th className="px-4 py-3 text-right">Faturamento</th>
+              <th className="px-4 py-3 text-right">Ticket Médio</th>
+              <th className="px-4 py-3 text-right">Comissão Pendente</th>
+              <th className="px-4 py-3 text-right">Comissão Paga (mês)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sellers.map(s => (
+              <tr key={s.userId} className="border-b border-gray-100 hover:bg-gray-50 text-sm">
+                <td className="px-4 py-3 font-medium text-gray-900">{s.nome}</td>
+                <td className="px-4 py-3 text-right text-gray-600">{s.totalVendas}</td>
+                <td className="px-4 py-3 text-right text-emerald-600">{fmt(s.valorVendido)}</td>
+                <td className="px-4 py-3 text-right text-gray-600">{fmt(s.ticketMedio)}</td>
+                <td className="px-4 py-3 text-right text-amber-600">{fmt(s.comissaoPendente)}</td>
+                <td className="px-4 py-3 text-right text-green-600">{fmt(s.comissaoPagaMes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      <h2 className="text-lg font-bold text-gray-800 mb-4 mt-8">Desempenho por Loja</h2>
       <div className="overflow-x-auto">
         <table className="w-full bg-white rounded-xl shadow-sm border border-gray-200">
           <thead>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { fetchApi } from '../lib/api';
+import { formatDateBR } from '../lib/dates';
+import { formatBRL } from '../utils/format';
 
 interface Profile {
   id: string; nomeCompleto: string; cpf: string; telefoneWhatsapp: string;
@@ -34,26 +36,77 @@ export function PortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // SEGURANÇA: o token do link é trocado por uma sessão de 30 min e removido da URL.
+  // Assim ele não fica gravado no histórico do navegador nem vaza em logs/Referer.
+  const getSessionToken = () => sessionStorage.getItem('portalSession');
+
   useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    Promise.all([
-      fetchApi(`/customer-portal/${token}`).catch(() => { throw new Error('Erro ao carregar perfil'); }),
-      fetchApi(`/customer-portal/${token}/sales`).catch(() => [] as Sale[]),
-      fetchApi(`/customer-portal/${token}/receivables`).catch(() => [] as Receivable[]),
-    ])
-      .then(([p, s, r]) => {
-        setProfile(p);
-        setSales(s);
-        setReceivables(r);
-      })
-      .catch(() => setError('Link inválido ou expirado. Verifique seu link de acesso.'))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    const load = async (sessionToken: string) => {
+      const authHeaders = { Authorization: `Bearer ${sessionToken}` };
+      try {
+        const [p, s, r] = await Promise.all([
+          fetchApi('/customer-portal/profile', { headers: authHeaders }).catch(() => {
+            throw new Error('Erro ao carregar perfil');
+          }),
+          fetchApi('/customer-portal/sales', { headers: authHeaders }).catch(() => [] as Sale[]),
+          fetchApi('/customer-portal/receivables', { headers: authHeaders }).catch(() => [] as Receivable[]),
+        ]);
+        if (!cancelled) {
+          setProfile(p);
+          setSales(s);
+          setReceivables(r);
+        }
+      } catch {
+        if (!cancelled) {
+          sessionStorage.removeItem('portalSession');
+          setError('Link inválido ou expirado. Verifique seu link de acesso.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    const start = async () => {
+      setLoading(true);
+
+      // Caso 1: veio do link com token → troca por sessão curta e limpa a URL
+      if (token) {
+        try {
+          const res = await fetchApi<{ sessionToken: string; customer: Profile }>(
+            '/customer-portal/session',
+            { method: 'POST', body: JSON.stringify({ token }) }
+          );
+          sessionStorage.setItem('portalSession', res.sessionToken);
+          // Remove o token da URL (fica só /portal) — nada no histórico
+          window.history.replaceState({}, '', window.location.pathname);
+          setProfile(res.customer);
+          await load(res.sessionToken);
+        } catch {
+          if (!cancelled) {
+            setLoading(false);
+            setError('Link inválido ou expirado. Verifique seu link de acesso.');
+          }
+        }
+        return;
+      }
+
+      // Caso 2: sessão já ativa (URL limpa)
+      const sessionToken = getSessionToken();
+      if (sessionToken) {
+        await load(sessionToken);
+      } else {
+        setLoading(false);
+        setError('Sessão expirada. Peça um novo link de acesso à loja.');
+      }
+    };
+
+    start();
+    return () => { cancelled = true; };
   }, [token]);
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
-  const formatCurrency = (v: number | string) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v));
+  const formatDate = (d: string) => formatDateBR(d);
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -129,12 +182,12 @@ export function PortalPage() {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="text-xs text-gray-500">{formatDate(s.dataVenda)}</p>
-                        <p className="font-bold text-lg">{formatCurrency(s.valorTotalLiquido)}</p>
+                        <p className="font-bold text-lg">{formatBRL(s.valorTotalLiquido)}</p>
                       </div>
                       <span className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded-full">{s.formaPagamento}</span>
                     </div>
                     {s.saleItems.map((item, i) => (
-                      <p key={i} className="text-sm text-gray-600">{item.quantidade}x {item.product.nome} — {formatCurrency(item.precoUnitarioVendido)}</p>
+                      <p key={i} className="text-sm text-gray-600">{item.quantidade}x {item.product.nome} — {formatBRL(item.precoUnitarioVendido)}</p>
                     ))}
                   </div>
                 ))}
@@ -148,7 +201,7 @@ export function PortalPage() {
                   <div key={r.id} className="border border-gray-200 rounded-xl p-4 flex justify-between items-center">
                     <div>
                       <p className="text-xs text-gray-500">Vence em {formatDate(r.dataVencimento)}</p>
-                      <p className="font-bold text-lg">{formatCurrency(r.valorParcela)}</p>
+                      <p className="font-bold text-lg">{formatBRL(r.valorParcela)}</p>
                       <p className="text-xs text-gray-500">{r.numeroParcela}/{r.totalParcelas} — {r.formaPagamentoEsperada}</p>
                     </div>
                     <span className={`text-xs font-medium px-2 py-1 rounded-full ${

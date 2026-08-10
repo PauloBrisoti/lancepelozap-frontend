@@ -5,10 +5,12 @@ import {
   Palette, CreditCard, Mail, Shield, Key, Database,
   Download, Trash2, Plus, Power, Megaphone, Flag, RefreshCw
 } from 'lucide-react';
+import { formatDateTimeBR } from '../lib/dates';
+import type { Announcement } from '../types/api';
 
 interface BackupFile { name: string; size: number; createdAt: string; }
 interface ApiKey { id: string; name: string; key: string; active: boolean; }
-interface Announcement { id: string; title: string; message: string; type: string; active: boolean; }
+
 interface FeatureFlag { key: string; label: string; enabled: boolean; }
 
 export function ConfiguracoesGeraisAdminPage() {
@@ -30,7 +32,7 @@ export function ConfiguracoesGeraisAdminPage() {
   const [maintenance, setMaintenance] = useState({ enabled: false, message: '' });
   const [saving, setSaving] = useState(false);
 
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info' });
+  const [newAnnouncement, setNewAnnouncement] = useState<{ title: string; message: string; type: Announcement['type'] }>({ title: '', message: '', type: 'info' });
   const [newApiKey, setNewApiKey] = useState({ name: '' });
   const [newFlag, setNewFlag] = useState({ key: '', label: '' });
 
@@ -306,7 +308,7 @@ export function ConfiguracoesGeraisAdminPage() {
               <div className="flex items-end gap-3">
                 <div className="flex-1"><label className="block text-sm font-medium mb-1">Título</label><input type="text" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none" /></div>
                 <div className="flex-1"><label className="block text-sm font-medium mb-1">Mensagem</label><input type="text" value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none" /></div>
-                <div><label className="block text-sm font-medium mb-1">Tipo</label><select value={newAnnouncement.type} onChange={e => setNewAnnouncement({...newAnnouncement, type: e.target.value})} className="border rounded-lg px-3 py-2 outline-none"><option value="info">Info</option><option value="warning">Alerta</option><option value="success">Sucesso</option></select></div>
+                <div><label className="block text-sm font-medium mb-1">Tipo</label><select value={newAnnouncement.type} onChange={e => setNewAnnouncement({...newAnnouncement, type: e.target.value as Announcement['type']})} className="border rounded-lg px-3 py-2 outline-none"><option value="info">Info</option><option value="warning">Alerta</option><option value="success">Sucesso</option></select></div>
                 <button onClick={addAnnouncement} className="bg-brand-600 text-white p-2.5 rounded-lg hover:bg-brand-700"><Plus className="w-5 h-5" /></button>
               </div>
               <div className="space-y-2">
@@ -380,7 +382,7 @@ export function ConfiguracoesGeraisAdminPage() {
                   <div key={b.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-sm">{b.name}</p>
-                      <p className="text-xs text-gray-500">{new Date(b.createdAt).toLocaleString('pt-BR')} — {(b.size / 1024).toFixed(1)} KB</p>
+                      <p className="text-xs text-gray-500">{formatDateTimeBR(b.createdAt)} — {(b.size / 1024).toFixed(1)} KB</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <a href={`${import.meta.env.VITE_API_URL || '/api'}/super-admin/backups/${b.name}/download`}

@@ -2,18 +2,50 @@ import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchApi, ApiError } from '../lib/api';
+import { formatDateBR } from '../lib/dates';
+import { Modal } from '../components/Modal';
+import { useSubscription } from '../hooks/useSubscription';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
 
 const IconFileText = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
 const IconShield = () => <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>;
 
+interface Subscription {
+  id: string;
+  tenantId: string;
+  plano: string;
+  valorMensalidade: number;
+  dataVencimento: string;
+  statusPagamento: string;
+  tenant?: { razaoSocial: string };
+}
+
+interface PublicPlan {
+  id: string;
+  nome: string;
+  precoMensal: number;
+}
+
 export function PlanosPage() {
   const { user } = useAuth();
   const [modalTermosAberto, setModalTermosAberto] = useState(false);
-  
-  // Data state
-  const [minhaAssinatura, setMinhaAssinatura] = useState<{ plano: string; valorMensalidade: number; dataVencimento: string; statusPagamento: string; } | null>(null);
-  const [todasAssinaturas, setTodasAssinaturas] = useState<{ id: string; tenantId: string; plano: string; valorMensalidade: number; dataVencimento: string; statusPagamento: string; tenant?: { razaoSocial: string } }[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const { data: todasAssinaturas = [], isLoading: loadingTodas, refetch: refetchTodas } = useApiQuery<Subscription[]>(
+    ['subscriptions', 'all'],
+    '/subscriptions/all',
+    { enabled: isSuperAdmin, staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: minhaAssinatura, isLoading: loadingMinha, refetch: refetchMinha } = useSubscription(!isSuperAdmin);
+  const { data: plans = [] } = useApiQuery<PublicPlan[]>(
+    ['public-plans'],
+    '/public/plans',
+    { staleTime: STALE_TIMES.STATIC }
+  );
+
+  const loading = isSuperAdmin ? loadingTodas : loadingMinha;
 
   useEffect(() => {
     // Verificar retorno do Mercado Pago
@@ -29,34 +61,10 @@ export function PlanosPage() {
       toast.error('Falha no pagamento. Por favor, tente novamente.');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+  }, []);
 
-    async function loadData() {
-      try {
-        if (user?.role === 'SUPER_ADMIN') {
-          const data = await fetchApi('/subscriptions/all');
-          setTodasAssinaturas(data);
-        } else {
-          const data = await fetchApi('/subscriptions/me');
-          setMinhaAssinatura(data);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar assinaturas:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, [user]);
-
-  const [plans, setPlans] = useState<{ id: string; nome: string; precoMensal: number }[]>([]);
   const [changeModal, setChangeModal] = useState<{ open: boolean; planId: string; planNome: string }>({ open: false, planId: '', planNome: '' });
   const [changeMotivo, setChangeMotivo] = useState('');
-
-  useEffect(() => {
-    fetchApi<{ id: string; nome: string; precoMensal: number }[]>('/public/plans')
-      .then(setPlans)
-      .catch(() => {});
-  }, []);
 
   const statusSub = minhaAssinatura?.statusPagamento;
   const isPago = statusSub === 'PAGO';
@@ -74,9 +82,8 @@ export function PlanosPage() {
       if (data.init_point) {
         window.location.href = data.init_point;
       } else {
-        const sub = await fetchApi('/subscriptions/me');
-        setMinhaAssinatura(sub);
         toast.success('Plano registrado! Aguarde a confirmação do pagamento.');
+        await refetchMinha();
       }
     } catch {
       toast.error('Erro ao assinar plano');
@@ -113,8 +120,7 @@ export function PlanosPage() {
         body: JSON.stringify({ block: !isBlocked })
       });
       // Atualiza a lista
-      const data = await fetchApi('/subscriptions/all');
-      setTodasAssinaturas(data);
+      await refetchTodas();
     } catch {
       toast.error(`Erro ao ${actionStr} loja`);
     }
@@ -156,10 +162,10 @@ export function PlanosPage() {
                     </td>
                     <td className="px-6 py-4 text-gray-600 font-semibold">{sub.plano}</td>
                     <td className="px-6 py-4 text-gray-900 font-medium">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sub.valorMensalidade)}
+                      {formatBRL(sub.valorMensalidade)}
                     </td>
                     <td className="px-6 py-4 text-gray-600">
-                      {new Date(sub.dataVencimento).toLocaleDateString('pt-BR')}
+                      {formatDateBR(sub.dataVencimento)}
                     </td>
                     <td className="px-6 py-4">
                       {sub.statusPagamento === 'PAGO' ? (
@@ -263,10 +269,10 @@ export function PlanosPage() {
               <tr className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{minhaAssinatura.plano}</td>
                 <td className="px-6 py-4 text-gray-900 font-medium">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(minhaAssinatura.valorMensalidade)}
+                  {formatBRL(minhaAssinatura.valorMensalidade)}
                 </td>
                 <td className="px-6 py-4 text-gray-600">
-                  {new Date(minhaAssinatura.dataVencimento).toLocaleDateString('pt-BR')}
+                  {formatDateBR(minhaAssinatura.dataVencimento)}
                 </td>
                 <td className="px-6 py-4">
                   {minhaAssinatura.statusPagamento === 'PAGO' ? (
@@ -291,13 +297,8 @@ export function PlanosPage() {
 
       {/* MODAL DE SOLICITAÇÃO DE MUDANÇA DE PLANO */}
       {changeModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-gray-900">Mudar para {changeModal.planNome}</h3>
-              <button onClick={() => { setChangeModal({ open: false, planId: '', planNome: '' }); setChangeMotivo(''); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
-            </div>
-            <div className="p-6 space-y-4">
+        <Modal open onClose={() => { setChangeModal({ open: false, planId: '', planNome: '' }); setChangeMotivo(''); }} title={`Mudar para ${changeModal.planNome}`} size="sm">
+          <div className="space-y-4">
               <p className="text-sm text-gray-600">Descreva o motivo da solicitação de mudança de plano. Um chamado será aberto para análise.</p>
               <textarea
                 value={changeMotivo}
@@ -311,30 +312,20 @@ export function PlanosPage() {
                 <button onClick={solicitarMudanca} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700">Enviar Solicitação</button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL DE TERMOS DE ACEITE E USO */}
       {modalTermosAberto && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <IconShield /> Termos de Aceite e Condições de Uso
-              </h3>
-              <button onClick={() => setModalTermosAberto(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto space-y-6 text-gray-700 text-sm leading-relaxed">
+        <Modal open onClose={() => setModalTermosAberto(false)} title={<span className="flex items-center gap-2"><IconShield /> Termos de Aceite e Condições de Uso</span>}>
+          <div className="space-y-6 text-gray-700 text-sm leading-relaxed">
               <section>
                 <h4 className="font-bold text-gray-900 text-base mb-2">1. Aceitação dos Termos</h4>
                 <p>Ao assinar qualquer um dos planos (Starter, Pro ou Enterprise) oferecidos pela SaaS Pro, o Lojista (CONTRATANTE) concorda expressamente com os termos descritos neste documento.</p>
               </section>
             </div>
             
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-end">
+            <div className="py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
               <button 
                 onClick={() => setModalTermosAberto(false)} 
                 className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors"
@@ -342,9 +333,7 @@ export function PlanosPage() {
                 Ciente e De Acordo
               </button>
             </div>
-
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

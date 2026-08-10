@@ -1,33 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
 import { Send, AlertTriangle, CheckCircle, Info, CheckCheck } from 'lucide-react';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  createdAt: string;
-  readBy: string[];
-  read: boolean;
-}
+import { formatDateTimeBR } from '../lib/dates';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import type { Notification } from '../types/api';
 
 export function NotificacoesAdminPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ title: '', message: '', type: 'info' });
   const [sending, setSending] = useState(false);
 
-  const load = async () => {
-    try {
-      const data = await fetchApi('/super-admin/notifications');
-      setNotifications(Array.isArray(data) ? data : []);
-    } catch { toast.error('Erro ao carregar notificações'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
+  const { data: notifications = [], isLoading, refetch } = useApiQuery<Notification[]>(
+    ['super-admin', 'notifications'],
+    '/super-admin/notifications',
+    {
+      staleTime: STALE_TIMES.REALTIME,
+      select: (data) => (Array.isArray(data) ? data : []),
+    }
+  );
 
   const send = async () => {
     if (!form.title || !form.message) return toast.error('Título e mensagem obrigatórios');
@@ -39,7 +29,7 @@ export function NotificacoesAdminPage() {
       });
       toast.success('Notificação enviada para todos os lojistas!');
       setForm({ title: '', message: '', type: 'info' });
-      load();
+      await refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
     finally { setSending(false); }
   };
@@ -52,7 +42,7 @@ export function NotificacoesAdminPage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>;
+  if (isLoading) return <div className="p-8 text-gray-500">Carregando...</div>;
 
   return (
     <div className="space-y-6">
@@ -107,7 +97,7 @@ export function NotificacoesAdminPage() {
                 <p className="font-medium text-gray-900">{n.title}</p>
                 <p className="text-sm text-gray-600 mt-0.5">{n.message}</p>
                 <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                  <span>{new Date(n.createdAt).toLocaleString('pt-BR')}</span>
+                  <span>{formatDateTimeBR(n.createdAt)}</span>
                   <span className="flex items-center gap-1">
                     <CheckCheck className="w-3.5 h-3.5" /> {n.readBy?.length || 0} lida(s)
                   </span>

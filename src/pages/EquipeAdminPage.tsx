@@ -1,7 +1,10 @@
 import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
+import { Modal } from '../components/Modal';
+import { useModal } from '../hooks/useModal';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface Role {
   id: string;
@@ -15,54 +18,71 @@ interface UserTeam {
   email: string;
   role: string;
   ativo: boolean;
+  expiresAt?: string | null;
   internalRole?: Role;
 }
 
+const toDateInputValue = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const isExpired = (iso?: string | null) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < Date.now();
+};
+
 export function EquipeAdminPage() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<UserTeam[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const modal = useModal();
   
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteNome, setInviteNome] = useState('');
   const [inviteRoleId, setInviteRoleId] = useState('');
+  const [inviteExpiresAt, setInviteExpiresAt] = useState('');
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useApiQuery<UserTeam[]>(
+    ['super-admin', 'team-users'],
+    '/super-admin/team/users',
+    { staleTime: STALE_TIMES.NORMAL, enabled: isSuperAdmin }
+  );
+
+  const { data: roles = [], isLoading: rolesLoading } = useApiQuery<Role[]>(
+    ['super-admin', 'team-roles'],
+    '/super-admin/team/roles',
+    { staleTime: STALE_TIMES.STATIC, enabled: isSuperAdmin }
+  );
 
   useEffect(() => {
-    if (user?.role !== 'SUPER_ADMIN') return;
-    loadData();
-  }, [user?.role]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [usersRes, rolesRes] = await Promise.all([
-        fetchApi('/super-admin/team/users'),
-        fetchApi('/super-admin/team/roles')
-      ]);
-      setUsers(usersRes);
-      setRoles(rolesRes);
-      if (rolesRes.length > 0) setInviteRoleId(rolesRes[0].id);
-    } catch (error) {
-      console.error('Erro ao carregar equipe', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (roles.length > 0 && !inviteRoleId) setInviteRoleId(roles[0].id);
+  }, [roles, inviteRoleId]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await fetchApi('/super-admin/team/invite', {
         method: 'POST',
-        body: JSON.stringify({ email: inviteEmail, nome: inviteNome, roleId: inviteRoleId })
+        body: JSON.stringify({
+          email: inviteEmail,
+          nome: inviteNome,
+          roleId: inviteRoleId,
+          expiresAt: inviteExpiresAt ? new Date(inviteExpiresAt).toISOString() : null
+        })
       });
       toast('Convite enviado!');
-      setShowInviteModal(false);
+      modal.closeModal();
       setInviteEmail('');
       setInviteNome('');
-      loadData();
+      setInviteExpiresAt('');
+      refetchUsers();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Erro ao enviar convite');
     }
@@ -72,7 +92,7 @@ export function EquipeAdminPage() {
     if (!confirm('Tem certeza que deseja revogar o acesso deste usuário?')) return;
     try {
       await fetchApi(`/super-admin/team/users/${id}`, { method: 'DELETE' });
-      loadData();
+      refetchUsers();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Erro ao revogar acesso');
     }
@@ -84,13 +104,30 @@ export function EquipeAdminPage() {
         method: 'PATCH',
         body: JSON.stringify({ roleId: newRoleId })
       });
-      loadData();
+      refetchUsers();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Erro ao alterar papel');
     }
   };
 
-  if (loading) return <div className="p-8">Carregando equipe...</div>;
+  const expiryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleChangeExpiry = (userId: string, expiresAt: string) => {
+    if (expiryDebounceRef.current) clearTimeout(expiryDebounceRef.current);
+    expiryDebounceRef.current = setTimeout(async () => {
+      try {
+        await fetchApi(`/super-admin/team/users/${userId}/expiry`, {
+          method: 'PATCH',
+          body: JSON.stringify({ expiresAt: expiresAt ? new Date(`${expiresAt}T12:00:00`).toISOString() : null })
+        });
+        toast.success('Expiração atualizada.');
+        refetchUsers();
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : 'Erro ao atualizar expiração');
+      }
+    }, 600);
+  };
+
+  if (usersLoading || rolesLoading) return <div className="p-8">Carregando equipe...</div>;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -100,7 +137,7 @@ export function EquipeAdminPage() {
           <p className="text-gray-500 text-sm mt-1">Gerencie os usuários e permissões do painel administrativo</p>
         </div>
         <button
-          onClick={() => setShowInviteModal(true)}
+          onClick={() => modal.openModal()}
           className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
         >
           + Convidar Usuário
@@ -113,6 +150,7 @@ export function EquipeAdminPage() {
             <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
               <th className="p-4 font-medium">Nome / Email</th>
               <th className="p-4 font-medium">Papel</th>
+              <th className="p-4 font-medium">Acesso expira</th>
               <th className="p-4 font-medium">Status</th>
               <th className="p-4 font-medium text-right">Ações</th>
             </tr>
@@ -136,9 +174,24 @@ export function EquipeAdminPage() {
                   </select>
                 </td>
                 <td className="p-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.ativo ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {u.ativo ? 'Ativo' : 'Pendente/Inativo'}
-                  </span>
+                  <input
+                    type="date"
+                    value={toDateInputValue(u.expiresAt)}
+                    onChange={e => handleChangeExpiry(u.id, e.target.value)}
+                    className={`border rounded px-2 py-1 text-sm bg-white ${isExpired(u.expiresAt) ? 'border-red-300 text-red-600' : 'border-gray-300 text-gray-700'}`}
+                  />
+                </td>
+                <td className="p-4">
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.ativo ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {u.ativo ? 'Ativo' : 'Pendente/Inativo'}
+                    </span>
+                    {isExpired(u.expiresAt) && (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        Acesso expirado
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 text-right">
                   <button
@@ -154,66 +207,77 @@ export function EquipeAdminPage() {
         </table>
       </div>
 
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Convidar para a Equipe</h2>
-            <form onSubmit={handleInvite}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                  <input
-                    type="text"
-                    required
-                    value={inviteNome}
-                    onChange={e => setInviteNome(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
-                    placeholder="Nome do usuário"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                  <input
-                    type="email"
-                    required
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
-                    placeholder="email@dominio.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Papel</label>
-                  <select
-                    value={inviteRoleId}
-                    onChange={e => setInviteRoleId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                  >
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg shadow-sm"
-                >
-                  Enviar Convite
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={modal.open}
+        onClose={modal.closeModal}
+        size="sm"
+        title="Convidar para a Equipe"
+        rounded="xl" shadow="2xl"
+      >
+        <form onSubmit={handleInvite}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+              <input
+                type="text"
+                required
+                value={inviteNome}
+                onChange={e => setInviteNome(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
+                placeholder="Nome do usuário"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+              <input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none"
+                placeholder="email@dominio.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Papel</label>
+              <select
+                value={inviteRoleId}
+                onChange={e => setInviteRoleId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+              >
+                {roles.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Expiração do acesso (opcional)</label>
+              <input
+                type="date"
+                value={inviteExpiresAt}
+                onChange={e => setInviteExpiresAt(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+              />
+              <p className="text-xs text-gray-400 mt-1">Após essa data o usuário perde o acesso automaticamente.</p>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => modal.closeModal()}
+              className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg shadow-sm"
+            >
+              Enviar Convite
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

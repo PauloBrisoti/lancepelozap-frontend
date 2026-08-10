@@ -1,25 +1,14 @@
-import toast from 'react-hot-toast';
-import { useEffect, useState } from 'react';
-import { fetchApi } from '../lib/api';
+import { toast } from 'react-hot-toast';
 import type { AuditLogEntry } from '../types/api';
+import { formatDateTimeBR } from '../lib/dates';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 export function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadLogs() {
-      try {
-        const data = await fetchApi('/super-admin/audit-logs');
-        setLogs(data);
-      } catch (error) {
-        console.error('Erro ao carregar logs', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadLogs();
-  }, []);
+  const { data: logs = [], isLoading } = useApiQuery<AuditLogEntry[]>(
+    ['super-admin', 'audit-logs'],
+    '/super-admin/audit-logs',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
   return (
     <div className="space-y-6">
@@ -30,7 +19,7 @@ export function AuditLogsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-gray-500">Carregando logs...</div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -55,7 +44,7 @@ export function AuditLogsPage() {
                   logs.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-500">
-                        {new Date(log.createdAt).toLocaleString('pt-BR')}
+                        {formatDateTimeBR(log.createdAt)}
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{log.tenant?.nomeFantasia || '-'}</td>
                       <td className="px-4 py-3 text-gray-600">{log.user?.nome} ({log.user?.email})</td>

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { fetchApi } from '../lib/api';
+import React from 'react';
 import { Activity, HardDrive, Database, Cpu, Clock, AlertCircle, CheckCircle, RefreshCw, Server } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface SystemStatus {
   status: string;
@@ -19,19 +18,11 @@ interface SystemStatus {
 }
 
 export function MonitoramentoPage() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi('/super-admin/system-status');
-      setStatus(data);
-    } catch { toast.error('Erro ao carregar status'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
+  const { data: status, isLoading, isFetching, refetch } = useApiQuery<SystemStatus>(
+    ['super-admin', 'system-status'],
+    '/super-admin/system-status',
+    { staleTime: STALE_TIMES.REALTIME }
+  );
 
   const formatBytes = (b: number) => {
     if (b === 0) return '0 B';
@@ -40,7 +31,7 @@ export function MonitoramentoPage() {
     return `${(b / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
   };
 
-  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>;
+  if (isLoading) return <div className="p-8 text-gray-500">Carregando...</div>;
   if (!status) return <div className="p-8 text-red-500">Erro ao carregar status.</div>;
 
   return (
@@ -50,8 +41,8 @@ export function MonitoramentoPage() {
           <h1 className="text-2xl font-bold text-gray-900">Monitoramento do Sistema</h1>
           <p className="text-gray-500 text-sm">Status em tempo real do servidor e banco de dados.</p>
         </div>
-        <button onClick={load} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+        <button onClick={() => refetch()} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
         </button>
       </div>
 

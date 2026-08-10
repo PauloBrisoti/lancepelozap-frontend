@@ -1,28 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
-import { fetchApi } from '../lib/api';
+import { useState, useRef } from 'react';
 import { Terminal, RefreshCw, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 export function LogsServidorPage() {
-  const [logs, setLogs] = useState<{ file: string; lines: string[] }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [lines, setLines] = useState(100);
   const [filter, setFilter] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadLogs = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi(`/super-admin/server-logs?lines=${lines}`);
-      setLogs(data);
-    } catch {
-      toast.error('Erro ao carregar logs');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { loadLogs(); }, [lines]);
+  const { data: logs = [], isFetching, refetch } = useApiQuery<{ file: string; lines: string[] }[]>(
+    ['super-admin', 'server-logs', lines],
+    `/super-admin/server-logs?lines=${lines}`,
+    { staleTime: STALE_TIMES.REALTIME }
+  );
 
   const allLines = logs.flatMap(l =>
     l.lines
@@ -52,8 +42,8 @@ export function LogsServidorPage() {
             <option value={100}>100 linhas</option>
             <option value={500}>500 linhas</option>
           </select>
-          <button onClick={loadLogs} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+          <button onClick={() => refetch()} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium">
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
           </button>
           <button onClick={copyLogs} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium">
             <Copy className="w-4 h-4" /> Copiar
@@ -68,7 +58,7 @@ export function LogsServidorPage() {
           <span className="text-gray-500 text-xs ml-auto">{allLines.length} linhas</span>
         </div>
         <div className="p-4 font-mono text-xs leading-relaxed max-h-[70vh] overflow-y-auto">
-          {loading ? (
+          {isFetching ? (
             <div className="text-gray-500">Carregando...</div>
           ) : allLines.length === 0 ? (
             <div className="text-gray-500">Nenhum log encontrado.</div>
