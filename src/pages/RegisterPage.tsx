@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { fetchApi } from '../lib/api';
 import { PhoneInput } from '../components/PhoneInput';
 import { validarEmail, validarTelefone, validarSenha, validarNomeLoja, validarNomeResponsavel } from '../lib/validators';
@@ -130,6 +130,11 @@ export function RegisterPage() {
               <p className="text-sm text-gray-600">
                 Sua solicitação foi recebida e será analisada pelo administrador.
                 Você receberá um e-mail quando sua conta for ativada.
+              </p>
+              <p className="text-sm text-gray-600 bg-brand-50 border border-brand-200 rounded-lg p-3">
+                <strong>Importante:</strong> enviamos um link de confirmação para o seu e-mail.
+                Acesse a caixa de entrada (ou o spam) e clique no link em até 48 horas —
+                o acesso ao sistema depende dessa confirmação.
               </p>
               <Link to="/login" className="inline-block mt-4 bg-brand-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-brand-700">
                 Ir para o Login

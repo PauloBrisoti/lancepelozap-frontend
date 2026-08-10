@@ -14,7 +14,7 @@ vi.mock('react-hot-toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => ({ search: '' }),
 }));
@@ -41,10 +41,10 @@ describe('LoginPage', () => {
   });
 
   it('chama API de login no submit e navega para /app', async () => {
-    mockFetch.mockResolvedValueOnce({ user: { role: 'USER', email: 'test@test.com' } });
+    mockFetch.mockResolvedValueOnce({ user: { role: 'USER', email: 'test@lpzteste.app' } });
     renderPage();
 
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@lpzteste.app' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: '123456' } });
     fireEvent.click(screen.getByText('Entrar no Sistema'));
 
@@ -59,7 +59,7 @@ describe('LoginPage', () => {
     mockFetch.mockResolvedValueOnce({ user: { role: 'SUPER_ADMIN' } });
     renderPage();
 
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'admin@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'admin@lpzteste.app' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'admin123' } });
     fireEvent.click(screen.getByText('Entrar no Sistema'));
 
@@ -72,7 +72,7 @@ describe('LoginPage', () => {
     mockFetch.mockResolvedValueOnce({ require2FA: true, tempToken: 'token-2fa' });
     renderPage();
 
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@lpzteste.app' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: '123456' } });
     fireEvent.click(screen.getByText('Entrar no Sistema'));
 
@@ -86,7 +86,7 @@ describe('LoginPage', () => {
     mockFetch.mockResolvedValueOnce({ require2FA: true, tempToken: 'token-2fa' });
     renderPage();
 
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@lpzteste.app' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: '123456' } });
     fireEvent.click(screen.getByText('Entrar no Sistema'));
 
@@ -109,7 +109,7 @@ describe('LoginPage', () => {
     mockFetch.mockRejectedValueOnce(new Error('Credenciais inválidas'));
     renderPage();
 
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'test@lpzteste.app' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByText('Entrar no Sistema'));
 
@@ -130,7 +130,7 @@ describe('LoginPage', () => {
     renderPage();
 
     fireEvent.click(screen.getByText('Esqueceu a senha?'));
-    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'forgot@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('seu@email.com'), { target: { value: 'forgot@lpzteste.app' } });
     fireEvent.click(screen.getByText('Enviar Link de Recuperação'));
 
     await waitFor(() => {

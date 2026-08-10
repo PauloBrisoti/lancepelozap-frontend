@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { fetchApi } from '../lib/api';
 
 interface Store {
@@ -31,6 +31,9 @@ interface User {
   workspaces?: Workspace[];
   features?: Record<string, boolean>;
   dadosCompletos?: boolean;
+  twoFactorEnabled?: boolean;
+  emailVerified?: boolean;
+  emailVerificationRequired?: boolean;
 }
 
 interface AuthContextType {
@@ -106,8 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (ws) setActiveWorkspace(ws);
           }
         }
-      } catch (error) {
-        console.log('Não autenticado inicialmente ou erro ao recuperar sessão', error);
+      } catch {
+        // Sessão inválida/expirada: segue o fluxo de login normalmente
       } finally {
         setLoading(false);
       }
@@ -116,14 +119,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
+  // Encerra a sessão local quando o backend responde 401 (token expirado/inválido)
+  // Só age se havia sessão ativa — sem isso, o 401 do /auth/me na tela de login
+  // causaria um loop infinito de reload.
+  const hadSessionRef = useRef(false);
+  useEffect(() => {
+    hadSessionRef.current = !!user;
+  }, [user]);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      if (!hadSessionRef.current) return;
+      hadSessionRef.current = false;
+      setUser(null);
+      setActiveStoreId(null);
+      setActiveWorkspace(null);
+      setStoreIdCookie(null);
+      localStorage.removeItem('@LancePeloZap:activeStoreId');
+    };
+    window.addEventListener('session_expired', onSessionExpired);
+    return () => window.removeEventListener('session_expired', onSessionExpired);
+  }, []);
+
   // Mantém features/permissões atualizadas em tempo real:
   // refaz o /auth/me ao voltar para a aba e a cada 60s,
   // para que mudanças de features (ex.: desligar PDV) sumam do menu sem re-login.
+  // PERFORMANCE: só atualiza o estado se o usuário REALMENTE mudou — sem isso,
+  // a cada 60s o app inteiro re-renderizava sem necessidade.
   useEffect(() => {
-    const refresh = () => {
-      fetchApi('/auth/me').then(data => {
-        if (data.user) setUser(data.user);
-      }).catch(() => { /* sessão indisponível — ignora */ });
+    const refresh = async () => {
+      if (document.visibilityState === 'hidden') return; // aba oculta: não busca
+      try {
+        const data = await fetchApi('/auth/me');
+        if (data.user) {
+          setUser(prev => {
+            if (prev && JSON.stringify(prev) === JSON.stringify(data.user)) return prev;
+            return data.user;
+          });
+        }
+      } catch { /* sessão indisponível — ignora */ }
     };
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
     document.addEventListener('visibilitychange', onVisible);

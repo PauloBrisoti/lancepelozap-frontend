@@ -86,6 +86,16 @@ export async function fetchApi<T = any>(
       if (errorData.code === 'SUBSCRIPTION_EXPIRED') {
         window.dispatchEvent(new CustomEvent('subscription_expired', { detail: errorData.error }));
       }
+      if (errorData.twoFactorSetupRequired) {
+        window.dispatchEvent(new CustomEvent('two_factor_setup_required'));
+      }
+      if (response.status === 401) {
+        // O cookie de sessão é HttpOnly (invisível ao JS), então não dá para
+        // checá-lo aqui. Quem decide se o 401 representa fim de sessão real é o
+        // AuthContext (hadSessionRef), que ignora o evento se não havia sessão
+        // ativa — isso evita loop de reload na tela de login.
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
       throw new ApiError(
         errorData.error || errorData.message || `Erro ${response.status}`,
         response.status,

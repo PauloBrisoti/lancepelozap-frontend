@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { validarEmail } from '../lib/validators';
+import { TurnstileWidget } from '../components/TurnstileWidget';
 
 const IconLock = () => <svg className="w-12 h-12 text-brand-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>;
 
@@ -20,6 +21,9 @@ export function LoginPage() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -42,12 +46,21 @@ export function LoginPage() {
       return;
     }
 
+    if (captchaRequired && !captchaToken) {
+      setError('Resolva o desafio de segurança antes de continuar.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const data = await fetchApi('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password: senha })
+        body: JSON.stringify({
+          email,
+          password: senha,
+          captchaToken: captchaToken || undefined,
+        })
       });
 
       if (data.require2FA) {
@@ -58,12 +71,26 @@ export function LoginPage() {
       }
 
       login(data.user);
+      setCaptchaRequired(false);
+      setCaptchaToken(null);
       if (data.user.role === 'SUPER_ADMIN') {
         navigate('/admin');
       } else {
         navigate('/app');
       }
     } catch (err: unknown) {
+      const errorData = (err as { data?: Record<string, unknown> })?.data;
+      if (errorData?.emailVerificationRequired) {
+        navigate(`/verificar-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+      if (errorData?.captchaRequired) {
+        setCaptchaRequired(true);
+        setCaptchaToken(null);
+        setCaptchaAttempt((n) => n + 1);
+        setError('Muitas tentativas. Resolva o desafio de segurança para continuar.');
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : 'Erro ao realizar login';
       setError(errorMessage);
     } finally {
@@ -206,6 +233,20 @@ export function LoginPage() {
                   </button>
                 </div>
               </div>
+              {captchaRequired && (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-600">
+                    Verificação de segurança exigida após múltiplas tentativas:
+                  </p>
+                  <TurnstileWidget
+                    key={captchaAttempt}
+                    onToken={(token) => {
+                      setCaptchaToken(token);
+                      setError('');
+                    }}
+                  />
+                </div>
+              )}
               {error && (
                 <div className="bg-red-50 text-red-600 p-3 rounded text-sm mb-4">
                   {error}

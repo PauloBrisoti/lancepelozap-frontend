@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import { fetchApi } from '../lib/api';
 
 export function ResetPasswordPage() {
@@ -18,8 +18,8 @@ export function ResetPasswordPage() {
     setError('');
     setMessage('');
 
-    if (password.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres');
+    if (password.length < 8) {
+      setError('A senha deve ter no mínimo 8 caracteres');
       return;
     }
     if (password !== confirmPassword) {

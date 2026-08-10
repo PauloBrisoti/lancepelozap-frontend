@@ -1,12 +1,15 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { IdleSession } from './components/IdleSession';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const VerificarEmailPage = lazy(() => import('./pages/VerificarEmailPage').then(m => ({ default: m.VerificarEmailPage })));
+const TwoFactorSetupPage = lazy(() => import('./pages/TwoFactorSetupPage').then(m => ({ default: m.TwoFactorSetupPage })));
 const CompletarCadastroPage = lazy(() => import('./pages/CompletarCadastroPage').then(m => ({ default: m.CompletarCadastroPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
@@ -96,23 +99,47 @@ function FeatureGuard({ children, feature }: { children: React.ReactNode; featur
   return <>{children}</>;
 }
 
+const RESTRICTED_BLOCKED_PATHS = ['dashboard-pj', 'insights', 'bi', 'relatorios', 'financeiro',
+  'planos', 'configuracoes', 'importacao-legada', 'importar-planilha'];
+
+function StoreRoleGuard({ children }: { children: React.ReactNode }) {
+  const { user, activeWorkspace } = useAuth();
+  const location = useLocation();
+
+  const isRestricted = !user?.isImpersonating && activeWorkspace
+    ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role)
+    : false;
+
+  if (isRestricted) {
+    const currentPath = location.pathname.replace('/app/', '').split('/')[0];
+    if (currentPath === '' || RESTRICTED_BLOCKED_PATHS.includes(currentPath)) {
+      return <Navigate to="/app/vendas" replace />;
+    }
+  }
+
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   const location = useLocation();
   return (
     <ErrorBoundary resetKey={location.pathname}>
       <Suspense fallback={<PageLoader />}>
+        <TwoFactorSetupRedirect />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verificar-email" element={<VerificarEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/cadastro" element={<RegisterPage />} />
           <Route path="/catalogo/:tenantId" element={<CatalogoPublicoPage />} />
           <Route path="/portal/:token" element={<PortalPage />} />
+          <Route path="/portal" element={<PortalPage />} />
           <Route path="/app/completar-cadastro" element={<ProtectedRoute><CompletarCadastroPage /></ProtectedRoute>} />
 
           <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<DashboardPage />} />
-            <Route path="dashboard-pj" element={<DashboardPJPage />} />
+            <Route index element={<StoreRoleGuard><DashboardPage /></StoreRoleGuard>} />
+            <Route path="dashboard-pj" element={<StoreRoleGuard><DashboardPJPage /></StoreRoleGuard>} />
             <Route path="pdv" element={<FeatureGuard><PDVPage /></FeatureGuard>} />
             <Route path="caixa" element={<FeatureGuard><CashRegisterPage /></FeatureGuard>} />
             <Route path="vendas" element={<FeatureGuard><VendasPage /></FeatureGuard>} />
@@ -124,21 +151,21 @@ function AppRoutes() {
             <Route path="fornecedores" element={<FeatureGuard><FornecedoresPage /></FeatureGuard>} />
             <Route path="comissoes" element={<FeatureGuard><ComissoesPage /></FeatureGuard>} />
             <Route path="devolucoes" element={<FeatureGuard><DevolucoesPage /></FeatureGuard>} />
-            <Route path="insights" element={<InsightsPage />} />
-            <Route path="bi" element={<BiPage />} />
-            <Route path="relatorios" element={<FeatureGuard><RelatoriosPage /></FeatureGuard>} />
+            <Route path="insights" element={<StoreRoleGuard><InsightsPage /></StoreRoleGuard>} />
+            <Route path="bi" element={<StoreRoleGuard><BiPage /></StoreRoleGuard>} />
+            <Route path="relatorios" element={<StoreRoleGuard><RelatoriosPage /></StoreRoleGuard>} />
             <Route path="estoque" element={<FeatureGuard><EstoquePage /></FeatureGuard>} />
             <Route path="transferencias" element={<FeatureGuard><TransferenciasPage /></FeatureGuard>} />
             <Route path="inventario" element={<FeatureGuard><InventarioPage /></FeatureGuard>} />
-            <Route path="financeiro" element={<AppFinanceiro />} />
+            <Route path="financeiro" element={<StoreRoleGuard><AppFinanceiro /></StoreRoleGuard>} />
             <Route path="clientes" element={<FeatureGuard><ClientesPage /></FeatureGuard>} />
-            <Route path="planos" element={<PlanosPage />} />
-            <Route path="configuracoes" element={<ConfiguracoesPage />} />
-            <Route path="configuracoes/maquininha" element={<ConfigCardMachinePage />} />
+            <Route path="planos" element={<StoreRoleGuard><PlanosPage /></StoreRoleGuard>} />
+            <Route path="configuracoes" element={<StoreRoleGuard><ConfiguracoesPage /></StoreRoleGuard>} />
+            <Route path="configuracoes/maquininha" element={<StoreRoleGuard><ConfigCardMachinePage /></StoreRoleGuard>} />
             <Route path="whatsapp" element={<FeatureGuard><WhatsAppConfigPage /></FeatureGuard>} />
             <Route path="campanhas" element={<FeatureGuard><CampanhasPage /></FeatureGuard>} />
-            <Route path="importacao-legada" element={<LegacyImportPage />} />
-            <Route path="importar-planilha" element={<PlanilhaImportPage />} />
+            <Route path="importacao-legada" element={<StoreRoleGuard><LegacyImportPage /></StoreRoleGuard>} />
+            <Route path="importar-planilha" element={<StoreRoleGuard><PlanilhaImportPage /></StoreRoleGuard>} />
             <Route path="fiado" element={<FeatureGuard><FiadoPage /></FeatureGuard>} />
             <Route path="financas-pessoais" element={<PersonalDashboardPage />} />
             <Route path="chamados" element={<ChamadosLojistaPage />} />
@@ -162,10 +189,31 @@ function AppRoutes() {
             <Route path="monitoramento" element={<MonitoramentoPage />} />
             <Route path="logs" element={<LogsServidorPage />} />
           </Route>
+
+          <Route path="/admin/2fa-setup" element={<ProtectedRoute><TwoFactorSetupPage /></ProtectedRoute>} />
         </Routes>
       </Suspense>
     </ErrorBoundary>
   );
+}
+
+/**
+ * Redireciona para o setup de 2FA quando o backend responde
+ * 403 { twoFactorSetupRequired: true } (produção, admin sem 2FA).
+ */
+function TwoFactorSetupRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    const handler = () => {
+      if (location.pathname !== '/admin/2fa-setup') {
+        navigate('/admin/2fa-setup', { replace: true });
+      }
+    };
+    window.addEventListener('two_factor_setup_required', handler);
+    return () => window.removeEventListener('two_factor_setup_required', handler);
+  }, [navigate, location.pathname]);
+  return null;
 }
 
 export default function App() {
@@ -173,6 +221,7 @@ export default function App() {
     <AuthProvider>
       <Toaster position="top-right" />
       <BrowserRouter>
+        <IdleSession />
         <AppRoutes />
       </BrowserRouter>
     </AuthProvider>
