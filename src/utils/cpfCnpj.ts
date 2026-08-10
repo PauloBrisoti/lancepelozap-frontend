@@ -1,4 +1,4 @@
-export function isValidCPF(cpf: string): boolean {
+function isValidCPF(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '');
   if (digits.length !== 11) return false;
   if (/^(\d)\1+$/.test(digits)) return false;
@@ -16,7 +16,7 @@ export function isValidCPF(cpf: string): boolean {
   return rev === parseInt(digits[10]);
 }
 
-export function isValidCNPJ(cnpj: string): boolean {
+function isValidCNPJ(cnpj: string): boolean {
   const digits = cnpj.replace(/\D/g, '');
   if (digits.length !== 14) return false;
   if (/^(\d)\1+$/.test(digits)) return false;
@@ -45,12 +45,4 @@ export function isValidCPFOrCNPJ(value: string): boolean {
   return false;
 }
 
-export function formatCPF(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11);
-  return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-}
 
-export function formatCNPJ(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 14);
-  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-}

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { fetchApi, ApiError } from '../lib/api';
+import { usePoll } from './usePoll';
 
 interface StockAlert {
   id: string;
@@ -30,6 +31,9 @@ export function useStockAlerts() {
   const abortRef = useRef<AbortController | null>(null);
 
   const fetch = useCallback(async () => {
+    const hasUser = localStorage.getItem('@LancePeloZap:activeStoreId');
+    if (!hasUser) return;
+
     // Cancela request anterior se ainda estiver pendente
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
@@ -50,18 +54,8 @@ export function useStockAlerts() {
     }
   }, []);
 
-  useEffect(() => {
-    const hasUser = localStorage.getItem('@LancePeloZap:activeStoreId');
-    if (!hasUser) return;
-
-    fetch();
-    const interval = setInterval(fetch, 60000);
-
-    return () => {
-      clearInterval(interval);
-      if (abortRef.current) abortRef.current.abort();
-    };
-  }, [fetch]);
+  // Polling a cada 60s, pausado quando a aba está oculta
+  usePoll(fetch, 60_000);
 
   return { count, products, refetch: fetch };
 }

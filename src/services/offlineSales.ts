@@ -106,27 +106,6 @@ export async function markFailed(id: number, error: string): Promise<void> {
   });
 }
 
-export async function getFailedSales(): Promise<PendingSale[]> {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const store = tx.objectStore(STORE_NAME);
-  const index = store.index('status');
-  const range = IDBKeyRange.only('failed');
-  return new Promise((resolve, reject) => {
-    const result: PendingSale[] = [];
-    const cursor = index.openCursor(range);
-    cursor.onsuccess = () => {
-      if (cursor.result) {
-        result.push(cursor.result.value);
-        cursor.result.continue();
-      } else {
-        resolve(result);
-      }
-    };
-    cursor.onerror = () => reject(cursor.error);
-  });
-}
-
 export async function getQueueCount(): Promise<number> {
   const pending = await getPendingSales();
   return pending.length;
