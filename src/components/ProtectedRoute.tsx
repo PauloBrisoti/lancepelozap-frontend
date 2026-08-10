@@ -1,7 +1,9 @@
-import { useState, useEffect, type ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { type ReactNode } from 'react';
+import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { fetchApi, ApiError } from '../lib/api';
+import { ApiError } from '../lib/api';
+import { useSubscription } from '../hooks/useSubscription';
+import { isSubscriptionBlocked } from '../utils/subscription';
 
 interface Props {
   children: ReactNode;
@@ -9,30 +11,24 @@ interface Props {
 
 export function ProtectedRoute({ children }: Props) {
   const { isAuthenticated, loading, user } = useAuth();
-  const [subscriptionBlocked, setSubscriptionBlocked] = useState<boolean | null>(null);
   const location = useLocation();
 
-  useEffect(() => {
-    if (isAuthenticated && user?.role !== 'SUPER_ADMIN' && !location.pathname.startsWith('/admin')) {
-      fetchApi('/subscriptions/me')
-        .then((data: { statusPagamento: string } | null) => {
-          if (data && (data.statusPagamento === 'INADIMPLENTE' || data.statusPagamento === 'VENCIDO' || data.statusPagamento === 'PENDENTE')) {
-            setSubscriptionBlocked(true);
-          } else {
-            setSubscriptionBlocked(false);
-          }
-        })
-        .catch((err: ApiError) => {
-          if (err.data && (err.data as any).code === 'SUBSCRIPTION_EXPIRED') {
-            setSubscriptionBlocked(true);
-          } else {
-            setSubscriptionBlocked(false);
-          }
-        });
-    } else {
-      setSubscriptionBlocked(false);
-    }
-  }, [isAuthenticated, user, location.pathname]);
+  const canCheckSubscription =
+    isAuthenticated && user?.role !== 'SUPER_ADMIN' && !location.pathname.startsWith('/admin');
+
+  const { data: sub, isLoading: loadingSub, error } = useSubscription(canCheckSubscription);
+
+  let subscriptionBlocked: boolean | null;
+  if (!canCheckSubscription) {
+    subscriptionBlocked = false;
+  } else if (loadingSub) {
+    subscriptionBlocked = null;
+  } else {
+    const data = (error as ApiError).data;
+    const expired = !!error && typeof data === 'object' && data !== null &&
+      (data as { code?: string }).code === 'SUBSCRIPTION_EXPIRED';
+    subscriptionBlocked = expired || isSubscriptionBlocked(sub?.statusPagamento);
+  }
 
   if (loading || subscriptionBlocked === null) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Carregando sistema...</div>;

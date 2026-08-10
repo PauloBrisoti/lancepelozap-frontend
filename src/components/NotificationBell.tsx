@@ -1,18 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchApi } from '../lib/api';
 import { Bell, CheckCheck, AlertTriangle, CheckCircle, Megaphone } from 'lucide-react';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  createdAt: string;
-  read: boolean;
-}
+import { formatDateTimeBR } from '../lib/dates';
+import { useNotifications } from '../hooks/useNotifications';
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, unread, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -23,24 +15,6 @@ export function NotificationBell() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  useEffect(() => {
-    fetchApi('/notifications')
-      .then(data => { if (Array.isArray(data)) setNotifications(data); })
-      .catch(() => {});
-  }, []);
-
-  const unread = notifications.filter(n => !n.read).length;
-
-  const markRead = async (id: string) => {
-    await fetchApi(`/notifications/${id}/read`, { method: 'PUT' });
-    setNotifications(p => p.map(n => n.id === id ? { ...n, read: true } : n));
-  };
-
-  const markAllRead = async () => {
-    await fetchApi('/notifications/read-all', { method: 'PUT' });
-    setNotifications(p => p.map(n => ({ ...n, read: true })));
-  };
 
   const typeIcon = (type: string) => {
     switch (type) {
@@ -93,7 +67,7 @@ export function NotificationBell() {
                     <p className={`text-sm ${n.read ? 'text-gray-600' : 'text-gray-900 font-semibold'}`}>{n.title}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
                     <p className="text-[10px] text-gray-400 mt-1">
-                      {new Date(n.createdAt).toLocaleString('pt-BR')}
+                      {formatDateTimeBR(n.createdAt)}
                     </p>
                   </div>
                   {!n.read && <span className="w-2 h-2 rounded-full bg-brand-500 mt-2 shrink-0" />}

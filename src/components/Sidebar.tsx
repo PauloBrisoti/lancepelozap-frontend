@@ -1,11 +1,12 @@
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { useStockAlerts } from '../hooks/useStockAlerts';
 import { AccordionSection } from './AccordionSection';
 import { ContextSwitcher } from './ContextSwitcher';
 import { AnnouncementsBanner } from './AnnouncementsBanner';
 import { PendingCountBadge } from './PendingCountBadge';
+import { fetchApi } from '../lib/api';
 import { TicketBadge } from './TicketBadge';
 import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPackage, IconFinance, IconShoppingBag } from './icons';
 
@@ -15,6 +16,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
   const { count: alertCount } = useStockAlerts();
 
   const isPf = activeWorkspace?.tipo === 'PF';
+  const isRestricted = !user?.isImpersonating && activeWorkspace ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role) : false;
   const can = (key?: string) => {
     const f = user?.features;
     if (!f || !key) return true;
@@ -79,7 +81,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
       <AnnouncementsBanner />
 
       <nav className="flex-1 p-4 space-y-1">
-        <Link to={user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : '/app'} className={getLinkClass(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : '/app')}><IconHome /> {user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? 'Visão Geral SaaS' : activeWorkspace?.tipo === 'PF' ? 'Dashboard PF' : 'Início'}</Link>
+        <Link to={user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestricted ? '/app/vendas' : '/app'} className={getLinkClass(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestricted ? '/app/vendas' : '/app')}><IconHome /> {user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? 'Visão Geral SaaS' : activeWorkspace?.tipo === 'PF' ? 'Dashboard PF' : isRestricted ? 'Vendas' : 'Início'}</Link>
 
         {!(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating) && (
           <>
@@ -102,22 +104,22 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Crediário / Fiado
                 </Link>}
-                {(!user?.features || user.features?.financeiro) && <Link to="/app/financeiro" className={getLinkClass('/app/financeiro')}><IconFinance /> Financeiro</Link>}
+                {!isRestricted && (!user?.features || user.features?.financeiro) && <Link to="/app/financeiro" className={getLinkClass('/app/financeiro')}><IconFinance /> Financeiro</Link>}
               </>
             )}
 
             <div className="border-t border-gray-200 pt-2 mt-2">
               {activeWorkspace?.tipo !== 'PF' && (
                 <AccordionSection title="Gestão & Relatórios" icon="📊" defaultOpen={activeSection === 'Gestão & Relatórios'}>
-                  {(!user?.features || user.features?.dashboard_pj) && <Link to="/app/dashboard-pj" className={getLinkClass('/app/dashboard-pj')}>
+                  {!isRestricted && (!user?.features || user.features?.dashboard_pj) && <Link to="/app/dashboard-pj" className={getLinkClass('/app/dashboard-pj')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     Dashboard Consolidado
                   </Link>}
-                  {(!user?.features || user.features?.relatorios) && <Link to="/app/relatorios" className={getLinkClass('/app/relatorios')}>
+                  {!isRestricted && (!user?.features || user.features?.relatorios) && <Link to="/app/relatorios" className={getLinkClass('/app/relatorios')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     Relatórios
                   </Link>}
-                  {(!user?.features || user.features?.insights) && <Link to="/app/insights" className={getLinkClass('/app/insights')}>
+                  {!isRestricted && (!user?.features || user.features?.insights) && <Link to="/app/insights" className={getLinkClass('/app/insights')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     Insights & IA
                   </Link>}
@@ -200,16 +202,18 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                 </Link>
               </AccordionSection>
 
-              <AccordionSection title="Configurações e Suporte" icon="⚙️" defaultOpen={activeSection === 'Configurações e Suporte'}>
-                <Link to="/app/planos" className={getLinkClass('/app/planos')}><IconCreditCard /> Planos</Link>
-                <Link to="/app/configuracoes" className={getLinkClass('/app/configuracoes')}><IconSettings /> Configurações</Link>
-                <Link to="/app/configuracoes/maquininha" className={getLinkClass('/app/configuracoes/maquininha')}>
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                  Maquininha de Cartão
-                </Link>
-                <Link to="/app/importacao-legada" className={getLinkClass('/app/importacao-legada')}><IconImport /> Importar Sistema Anterior</Link>
-                <Link to="/app/importar-planilha" className={getLinkClass('/app/importar-planilha')}><IconImport /> Importar Planilha</Link>
-              </AccordionSection>
+              {!isRestricted && (
+                <AccordionSection title="Configurações e Suporte" icon="⚙️" defaultOpen={activeSection === 'Configurações e Suporte'}>
+                  <Link to="/app/planos" className={getLinkClass('/app/planos')}><IconCreditCard /> Planos</Link>
+                  <Link to="/app/configuracoes" className={getLinkClass('/app/configuracoes')}><IconSettings /> Configurações</Link>
+                  <Link to="/app/configuracoes/maquininha" className={getLinkClass('/app/configuracoes/maquininha')}>
+                    <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                    Maquininha de Cartão
+                  </Link>
+                  <Link to="/app/importacao-legada" className={getLinkClass('/app/importacao-legada')}><IconImport /> Importar Sistema Anterior</Link>
+                  <Link to="/app/importar-planilha" className={getLinkClass('/app/importar-planilha')}><IconImport /> Importar Planilha</Link>
+                </AccordionSection>
+              )}
             </div>
           </>
         )}
@@ -288,7 +292,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
           <button
             onClick={async () => {
               try {
-                await fetch('/api/auth/logout', { method: 'POST' });
+                await fetchApi('/auth/logout', { method: 'POST' });
               } catch {}
               window.location.href = '/login';
             }}

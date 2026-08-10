@@ -1,44 +1,9 @@
-import { useState, useEffect } from 'react';
-import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
 import { X, Megaphone } from 'lucide-react';
-
-interface Announcement {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'warning' | 'success';
-  active: boolean;
-}
+import { useAnnouncements } from '../hooks/useAnnouncements';
 
 export function AnnouncementsBanner() {
-  const { user } = useAuth();
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const { visible, dismiss } = useAnnouncements();
 
-  useEffect(() => {
-    const stored = localStorage.getItem('@LancePeloZap:dismissedAnnouncements');
-    if (stored) setDismissed(new Set(JSON.parse(stored)));
-  }, []);
-
-  useEffect(() => {
-    // Só carrega anúncios se for Super Admin
-    if (user?.role !== 'SUPER_ADMIN') return;
-    fetchApi('/super-admin/announcements')
-      .then((data) => {
-        if (Array.isArray(data)) setAnnouncements(data.filter((a: Announcement) => a.active));
-      })
-      .catch(() => {});
-  }, [user?.role]);
-
-  const dismiss = (id: string) => {
-    const next = new Set(dismissed);
-    next.add(id);
-    setDismissed(next);
-    localStorage.setItem('@LancePeloZap:dismissedAnnouncements', JSON.stringify([...next]));
-  };
-
-  const visible = announcements.filter(a => !dismissed.has(a.id));
   if (visible.length === 0) return null;
 
   const colors: Record<string, string> = {
