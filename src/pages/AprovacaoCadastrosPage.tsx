@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { formatDateBR } from '../lib/dates';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface PendingClient {
   id: string; nome: string; email: string; telefone: string;
@@ -10,27 +12,20 @@ interface PendingClient {
 }
 
 export function AprovacaoCadastrosPage() {
-  const [pendentes, setPendentes] = useState<PendingClient[]>([]);
-  const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi('/super-admin/pending-registrations');
-      setPendentes(data);
-    } catch { toast.error('Erro ao carregar'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
+  const { data: pendentes = [], isLoading, refetch } = useApiQuery<PendingClient[]>(
+    ['super-admin', 'pending-registrations'],
+    '/super-admin/pending-registrations',
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
 
   const handleApprove = async (id: string) => {
     setActionId(id);
     try {
       const res = await fetchApi(`/super-admin/pending-registrations/${id}/approve`, { method: 'POST' });
       toast.success(res.message || 'Aprovado!');
-      setPendentes(p => p.filter(c => c.id !== id));
+      await refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
     finally { setActionId(null); }
   };
@@ -41,12 +36,12 @@ export function AprovacaoCadastrosPage() {
     try {
       const res = await fetchApi(`/super-admin/pending-registrations/${id}/reject`, { method: 'POST' });
       toast.success(res.message || 'Rejeitado');
-      setPendentes(p => p.filter(c => c.id !== id));
+      await refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
     finally { setActionId(null); }
   };
 
-  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>;
+  if (isLoading) return <div className="p-8 text-gray-500">Carregando...</div>;
 
   return (
     <div className="space-y-6">
@@ -55,7 +50,7 @@ export function AprovacaoCadastrosPage() {
           <h1 className="text-2xl font-bold text-gray-900">Aprovação de Cadastros</h1>
           <p className="text-gray-500 text-sm">{pendentes.length} pendente(s)</p>
         </div>
-        <button onClick={load} className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg font-medium hover:bg-gray-200">
+        <button onClick={() => refetch()} className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg font-medium hover:bg-gray-200">
           <RefreshCw className="w-4 h-4" /> Atualizar
         </button>
       </div>
@@ -83,7 +78,7 @@ export function AprovacaoCadastrosPage() {
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-4 text-sm text-gray-600">
                     <div><span className="text-gray-400">Telefone:</span> {c.telefone || '-'}</div>
-                    <div><span className="text-gray-400">Data:</span> {new Date(c.createdAt).toLocaleDateString('pt-BR')}</div>
+                    <div><span className="text-gray-400">Data:</span> {formatDateBR(c.createdAt)}</div>
                     <div><span className="text-gray-400">Usuário:</span> {c.user?.nome || '-'}</div>
                     <div><span className="text-gray-400">Loja:</span> {c.store?.nomeFantasia || '-'}</div>
                   </div>

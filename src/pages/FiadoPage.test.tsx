@@ -9,7 +9,6 @@ vi.mock('../lib/api', () => ({
 
 vi.mock('../lib/query', () => ({
   useApiQuery: () => ({ data: mockReceivables, isLoading: false, error: null, refetch: vi.fn() }),
-  useApiMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('react-hot-toast', () => ({

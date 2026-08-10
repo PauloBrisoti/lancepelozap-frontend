@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { CampaignLog } from '../types/api';
+import { formatDateTimeBR } from '../lib/dates';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface Customer {
   id: string; nomeCompleto: string; telefoneWhatsapp: string;
@@ -13,9 +15,6 @@ interface Template {
 }
 
 export function CampanhasPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [logs, setLogs] = useState<CampaignLog[]>([]);
   const [tab, setTab] = useState<'enviar' | 'templates' | 'historico'>('enviar');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState('');
@@ -28,11 +27,23 @@ export function CampanhasPage() {
   const [templateConteudo, setTemplateConteudo] = useState('');
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
-  useEffect(() => {
-    fetchApi('/customers').then(setCustomers).catch(() => {});
-    fetchApi('/whatsapp/templates').then(setTemplates).catch(() => {});
-    fetchApi('/whatsapp/logs?limit=20').then(setLogs).catch(() => {});
-  }, []);
+  const { data: customers = [], refetch: refetchLogs } = useApiQuery<Customer[]>(
+    ['campanhas', 'customers'],
+    '/customers',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+
+  const { data: templates = [], refetch: refetchTemplates } = useApiQuery<Template[]>(
+    ['campanhas', 'templates'],
+    '/whatsapp/templates',
+    { staleTime: STALE_TIMES.STATIC }
+  );
+
+  const { data: logs = [] } = useApiQuery<CampaignLog[]>(
+    ['campanhas', 'logs'],
+    '/whatsapp/logs?limit=20',
+    { staleTime: STALE_TIMES.FREQUENT }
+  );
 
   const filteredCustomers = customers.filter(c =>
     c.aceitaMarketing && (!filter || c.nomeCompleto.toLowerCase().includes(filter.toLowerCase()))
@@ -61,7 +72,7 @@ export function CampanhasPage() {
       });
       toast.success(`${res.enviados} mensagens enviadas, ${res.erros} erros`);
       setSelectedIds(new Set());
-      fetchApi('/whatsapp/logs?limit=20').then(setLogs).catch(() => {});
+      refetchLogs();
     } catch { toast.error('Erro ao enviar campanha'); }
     finally { setSending(false); }
   };
@@ -83,7 +94,7 @@ export function CampanhasPage() {
         toast.success('Template criado');
       }
       setTemplateNome(''); setTemplateConteudo(''); setTemplateCategoria('MARKETING'); setEditingTemplate(null);
-      fetchApi('/whatsapp/templates').then(setTemplates).catch(() => {});
+      refetchTemplates();
     } catch { toast.error('Erro ao salvar template'); }
   };
 
@@ -96,7 +107,7 @@ export function CampanhasPage() {
   const deleteTemplate = async (id: string) => {
     if (!confirm('Excluir template?')) return;
     await fetchApi(`/whatsapp/templates/${id}`, { method: 'DELETE' });
-    fetchApi('/whatsapp/templates').then(setTemplates).catch(() => {});
+    refetchTemplates();
   };
 
   const applyTemplate = (t: Template) => {
@@ -252,7 +263,7 @@ export function CampanhasPage() {
               <tbody className="divide-y divide-gray-200">
                 {logs.map((log: CampaignLog) => (
                   <tr key={log.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 text-gray-500">{new Date(log.sentAt).toLocaleString('pt-BR')}</td>
+                    <td className="px-6 py-3 text-gray-500">{formatDateTimeBR(log.sentAt)}</td>
                     <td className="px-6 py-3">{log.customer?.nomeCompleto || '-'}</td>
                     <td className="px-6 py-3 text-xs uppercase">{log.tipo}</td>
                     <td className="px-6 py-3">

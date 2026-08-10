@@ -1,7 +1,8 @@
 import toast from 'react-hot-toast';
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useEffectEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '../lib/api';
+import { todayLocalDate, formatBRL } from '../utils/format';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { queueSale } from '../services/offlineSales';
@@ -51,7 +52,7 @@ export const PDVPage: React.FC = () => {
   const [itemEmEdicao, setItemEmEdicao] = useState<CartItem | null>(null);
   const [cartAberto, setCartAberto] = useState(false);
   const [paymentFees, setPaymentFees] = useState<any[]>([]);
-  const [dataVenda, setDataVenda] = useState(new Date().toISOString().split('T')[0]);
+  const [dataVenda, setDataVenda] = useState(() => todayLocalDate());
   const [repasseTaxa, setRepasseTaxa] = useState(false);
 
   const [scannerAberto, setScannerAberto] = useState(false);
@@ -60,6 +61,12 @@ export const PDVPage: React.FC = () => {
   const buscaRef = useRef<HTMLInputElement>(null);
 
   const [ajudaAtalhos, setAjudaAtalhos] = useState(false);
+
+  // Sempre a versão mais recente de finalizarVenda (evita stale closure
+  // no listener de teclado, que não é re-registrado a cada render)
+  const finalizarVendaEvent = useEffectEvent(() => {
+    void finalizarVenda();
+  });
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -76,7 +83,7 @@ export const PDVPage: React.FC = () => {
       }
       if (e.key === 'F8' && carrinho.length > 0 && !saving) {
         e.preventDefault();
-        finalizarVenda();
+        finalizarVendaEvent();
       }
       if (e.key === 'F1') {
         e.preventDefault();
@@ -278,6 +285,12 @@ export const PDVPage: React.FC = () => {
 
     setSaving(true);
     try {
+      const agora = new Date();
+      const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+      const dataVendaEnvio = dataVenda === todayLocalDate()
+        ? `${dataVenda}T${horaAtual}`
+        : dataVenda;
+
       const body = {
         customerId: clienteId || undefined,
         itens: carrinho,
@@ -287,7 +300,7 @@ export const PDVPage: React.FC = () => {
         valorSinal: Number(sinal),
         numeroParcelas: Number(parcelas),
         repasseTaxa,
-        dataVenda: dataVenda || undefined
+        dataVenda: dataVendaEnvio || undefined
       };
 
       if (!isOnline) {
@@ -299,7 +312,7 @@ export const PDVPage: React.FC = () => {
         setSinal(0);
         setParcelas(1);
         setClienteId('');
-        setDataVenda(new Date().toISOString().split('T')[0]);
+        setDataVenda(todayLocalDate());
         setCartAberto(false);
         setSaving(false);
         return;
@@ -328,7 +341,7 @@ export const PDVPage: React.FC = () => {
       setSinal(0);
       setParcelas(1);
       setClienteId('');
-      setDataVenda(new Date().toISOString().split('T')[0]);
+      setDataVenda(todayLocalDate());
       setCartAberto(false);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
@@ -405,7 +418,7 @@ export const PDVPage: React.FC = () => {
                 <h3 className="font-semibold text-gray-800 text-sm md:text-base line-clamp-2 leading-tight flex-1">{prod.nome}</h3>
                 <div className="mt-2 flex justify-between items-end gap-1">
                   <span className="text-brand-600 font-bold text-sm md:text-base">
-                    R$ {Number(prod.precoVendaSugerido).toFixed(2)}
+                    {formatBRL(prod.precoVendaSugerido ?? 0)}
                   </span>
                   <span className={`text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-full whitespace-nowrap ${Number(prod.qtdEstoqueAtual) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {Number(prod.qtdEstoqueAtual)}
@@ -481,7 +494,7 @@ export const PDVPage: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xl font-black text-green-600">R$ {total.toFixed(2)}</span>
+            <span className="text-xl font-black text-green-600">{formatBRL(total)}</span>
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </div>
         </button>
@@ -654,14 +667,14 @@ export const PDVPage: React.FC = () => {
             <div className="px-6 py-4 bg-green-500 text-white text-center">
               <div className="text-4xl mb-2">✅</div>
               <h3 className="text-xl font-bold">Venda Finalizada!</h3>
-              <p className="text-green-100 text-sm mt-1">R$ {vendaFinalizada.total.toFixed(2)} • {vendaFinalizada.formaPagamento}</p>
+              <p className="text-green-100 text-sm mt-1">{formatBRL(vendaFinalizada.total)} • {vendaFinalizada.formaPagamento}</p>
             </div>
             
             <div className="p-6 space-y-3">
               <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
                 <p className="font-medium text-gray-700">Cliente: {vendaFinalizada.clienteNome}</p>
                 {vendaFinalizada.itens.map((item, i) => (
-                  <p key={i} className="text-gray-500">{item.quantidade}x {item.nome} — R$ {(item.precoUnitarioVendido * item.quantidade).toFixed(2)}</p>
+                  <p key={i} className="text-gray-500">{item.quantidade}x {item.nome} — {formatBRL(item.precoUnitarioVendido * item.quantidade)}</p>
                 ))}
               </div>
 
@@ -682,9 +695,9 @@ export const PDVPage: React.FC = () => {
                       });
                       toast.success('Comprovante enviado!');
                     } catch {
-                      const itensMsg = vendaFinalizada.itens.map(i => `  • ${i.quantidade}x ${i.nome} — R$ ${(i.precoUnitarioVendido * i.quantidade).toFixed(2)}`).join('\n');
+                      const itensMsg = vendaFinalizada.itens.map(i => `  • ${i.quantidade}x ${i.nome} — ${formatBRL(i.precoUnitarioVendido * i.quantidade)}`).join('\n');
                       const msg = encodeURIComponent(
-                        `🧾 *Comprovante de Venda*\n*Lance Pelo Zap*\n\nCliente: ${vendaFinalizada.clienteNome}\n\nItens:\n${itensMsg}\n\n💰 *Total: R$ ${vendaFinalizada.total.toFixed(2)}*\n💳 Pagamento: ${vendaFinalizada.formaPagamento}\n\nObrigado pela preferência! 🤝`
+                        `🧾 *Comprovante de Venda*\n*Lance Pelo Zap*\n\nCliente: ${vendaFinalizada.clienteNome}\n\nItens:\n${itensMsg}\n\n💰 *Total: ${formatBRL(vendaFinalizada.total)}*\n💳 Pagamento: ${vendaFinalizada.formaPagamento}\n\nObrigado pela preferência! 🤝`
                       );
                       window.open(`https://wa.me/55${fone}?text=${msg}`, '_blank');
                     }
@@ -779,7 +792,7 @@ function CartContent({
                   <span className="px-4 py-2 font-semibold bg-white min-w-[2.5rem] text-center text-base">{item.quantidade}</span>
                   <button onClick={() => alterarQuantidade(item.productId, 1)} className="px-4 py-2 hover:bg-gray-200 text-gray-700 rounded-r-xl transition-colors active:bg-gray-300 text-lg font-medium">+</button>
                 </div>
-                <span className="font-bold text-gray-800 text-base">R$ {(item.precoUnitarioVendido * item.quantidade).toFixed(2)}</span>
+                <span className="font-bold text-gray-800 text-base">{formatBRL(item.precoUnitarioVendido * item.quantidade)}</span>
               </div>
             </div>
           ))
@@ -790,7 +803,7 @@ function CartContent({
       <div className="p-4 bg-white border-t border-gray-200 space-y-3">
         <div className="flex items-center justify-between text-gray-500 text-sm">
           <span>Subtotal</span>
-          <span>R$ {subtotal.toFixed(2)}</span>
+          <span>{formatBRL(subtotal)}</span>
         </div>
 
         <div>
@@ -843,7 +856,7 @@ function CartContent({
               </div>
             </div>
             <div className="text-xs text-brand-800 bg-brand-100 p-2 rounded flex justify-between font-medium mt-1">
-              <span>Total: R$ {total.toFixed(2)}</span>
+              <span>Total: {formatBRL(total)}</span>
               {formaPagamento === 'CREDIARIO' ? (
                 <span>Fiado: R$ {Math.max(0, total - sinal).toFixed(2)}</span>
               ) : (
@@ -882,7 +895,7 @@ function CartContent({
 
         <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
           <span className="text-lg font-bold text-gray-800">Total a Pagar</span>
-          <span className="text-2xl md:text-3xl font-black text-green-600">R$ {total.toFixed(2)}</span>
+          <span className="text-2xl md:text-3xl font-black text-green-600">{formatBRL(total)}</span>
         </div>
 
         <button 

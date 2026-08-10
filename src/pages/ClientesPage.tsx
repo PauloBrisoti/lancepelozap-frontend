@@ -2,6 +2,9 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
 import { isValidCPFOrCNPJ } from '../utils/cpfCnpj';
+import { formatBRL } from '../utils/format';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useCep, formatCepInput, buildEnderecoCompleto } from '../hooks/useCep';
 
 interface Customer {
   id: string;
@@ -20,9 +23,8 @@ interface Customer {
 }
 
 export function ClientesPage() {
-  const [clientes, setClientes] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const { buscar: buscarCep } = useCep();
   // No mobile o cadastro vira uma "página" normal no fluxo do documento
   // (rolagem interna de modal não funciona em alguns navegadores iOS).
   const [telaCadastro, setTelaCadastro] = useState(false);
@@ -54,23 +56,11 @@ export function ClientesPage() {
     return () => vv.removeEventListener('resize', update);
   }, []);
 
-  const carregarClientes = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchApi('/customers');
-      setClientes(data);
-    } catch (error) {
-      console.error('Erro ao carregar clientes', error);
-      toast.error('Erro ao carregar clientes.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-     
-    carregarClientes();
-  }, []);
+  const { data: clientes = [], isLoading, refetch } = useApiQuery<Customer[]>(
+    ['customers'],
+    '/customers',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +86,7 @@ export function ClientesPage() {
       }
       setModalAberto(false);
       setTelaCadastro(false);
-      carregarClientes();
+      await refetch();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Erro ao salvar cliente';
       toast(msg);
@@ -116,7 +106,7 @@ export function ClientesPage() {
     if (confirm('Deseja realmente excluir este cliente?')) {
       try {
         await fetchApi(`/customers/${id}`, { method: 'DELETE' });
-        carregarClientes();
+        await refetch();
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : 'Erro ao excluir cliente';
         toast(msg);
@@ -169,7 +159,7 @@ export function ClientesPage() {
         body: formData,
       });
       toast.success(`Importação concluída! Sucessos: ${data.successCount}, Erros: ${data.errorCount}`);
-      carregarClientes();
+      await refetch();
     } catch (err: any) {
       toast.error(err?.message || 'Erro na importação');
     }
@@ -212,22 +202,17 @@ export function ClientesPage() {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
             placeholder="00000-000"
             value={formulario.cep || ''}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, '');
-              let formatted = val;
-              if (val.length > 5) formatted = val.slice(0,5) + '-' + val.slice(5,8);
-              setFormulario({...formulario, cep: formatted});
-              if (val.length === 8) {
-                fetch(`https://viacep.com.br/ws/${val}/json/`)
-                  .then(res => res.json())
-                  .then(data => {
-                    if (!data.erro) {
-                      setFormulario(prev => ({
-                        ...prev,
-                        enderecoCompleto: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
-                      }));
-                    }
-                  });
+            onChange={async (e) => {
+              const formatted = formatCepInput(e.target.value);
+              setFormulario(prev => ({...prev, cep: formatted}));
+              if (formatted.replace(/\D/g, '').length === 8) {
+                const data = await buscarCep(formatted);
+                if (data) {
+                  setFormulario(prev => ({
+                    ...prev,
+                    enderecoCompleto: buildEnderecoCompleto(data),
+                  }));
+                }
               }
             }}
           />
@@ -280,7 +265,7 @@ export function ClientesPage() {
 
       {/* Cards no mobile */}
       <div className="md:hidden space-y-3">
-        {loading ? (
+        {isLoading ? (
           <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-500 text-sm">Carregando clientes...</div>
         ) : clientes.length > 0 ? (
           clientes.map((cliente) => (
@@ -288,7 +273,7 @@ export function ClientesPage() {
               <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold text-gray-900 text-sm truncate">{cliente.nomeCompleto}</p>
                 {cliente.saldoDevedor && cliente.saldoDevedor > 0 ? (
-                  <span className="text-red-600 font-bold text-xs shrink-0">R$ {cliente.saldoDevedor.toFixed(2)}</span>
+                  <span className="text-red-600 font-bold text-xs shrink-0">{formatBRL(cliente.saldoDevedor)}</span>
                 ) : null}
               </div>
               <div className="mt-2 space-y-1 text-sm text-gray-600">
@@ -322,7 +307,7 @@ export function ClientesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (
+              {isLoading ? (
                 <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Carregando clientes...</td></tr>
               ) : clientes.length > 0 ? (
                 clientes.map((cliente) => (
@@ -333,7 +318,7 @@ export function ClientesPage() {
                     <td className="px-6 py-4 text-gray-600 truncate max-w-xs">{cliente.enderecoCompleto || '-'}</td>
                     <td className="px-6 py-4 text-right">
                       {cliente.saldoDevedor && cliente.saldoDevedor > 0 ? (
-                        <span className="font-bold text-red-600">R$ {cliente.saldoDevedor.toFixed(2)}</span>
+                        <span className="font-bold text-red-600">{formatBRL(cliente.saldoDevedor)}</span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}

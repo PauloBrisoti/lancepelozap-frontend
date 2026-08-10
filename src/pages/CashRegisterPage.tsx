@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-
-interface CashTransaction {
-  id: string;
-  tipo: string;
-  valor: number;
-  descricao: string | null;
-  createdAt: string;
-}
+import { Modal } from '../components/Modal';
+import { Pagination } from '../components/Pagination';
+import { CashTransactionList } from '../components/CashTransactionList';
+import type { CashTransaction } from '../types/api';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
 
 interface CurrentRegister {
   id: string;
@@ -57,14 +55,7 @@ interface ClosingReport {
   };
 }
 
-function formatCurrency(v: number | string) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v));
-}
-
 export function CashRegisterPage() {
-  const [current, setCurrent] = useState<CurrentRegister | null>(null);
-  const [history, setHistory] = useState<RegisterRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [closeModal, setCloseModal] = useState(false);
   const [transModal, setTransModal] = useState(false);
@@ -78,24 +69,25 @@ export function CashRegisterPage() {
   const [transDescricao, setTransDescricao] = useState('');
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => { loadData(); }, [page]);
+  const { data: currentRes, isLoading, refetch } = useApiQuery<{ data: CurrentRegister | null }>(
+    ['cash-register', 'current'],
+    '/cash-register/current',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: historyRes, refetch: refetchHistory } = useApiQuery<{ data: { records: RegisterRecord[]; total: number; limit: number } }>(
+    ['cash-register', 'history', page],
+    `/cash-register/history?page=${page}&limit=20`,
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [currentData, historyData] = await Promise.all([
-        fetchApi('/cash-register/current'),
-        fetchApi(`/cash-register/history?page=${page}&limit=20`),
-      ]);
-      setCurrent(currentData?.data || null);
-      if (historyData?.data) {
-        setHistory(historyData.data.records || []);
-        setTotalPages(Math.ceil((historyData.data.total || 0) / (historyData.data.limit || 20)));
-      }
-    } catch { toast.error('Erro ao carregar dados do caixa'); }
-    finally { setLoading(false); }
+  const current = currentRes?.data ?? null;
+  const history = historyRes?.data?.records ?? [];
+  const totalPages = Math.ceil((historyRes?.data?.total ?? 0) / (historyRes?.data?.limit ?? 20));
+
+  const loadData = () => {
+    refetch();
+    refetchHistory();
   };
 
   const handleOpen = async () => {
@@ -191,12 +183,12 @@ export function CashRegisterPage() {
       {closeResult && (
         <div className={`rounded-xl p-4 border ${closeResult.diferenca === 0 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
           <p className="font-semibold text-gray-900">Caixa Fechado</p>
-          <p className="text-sm text-gray-600">Saldo esperado: <strong>{formatCurrency(closeResult.saldoEsperado)}</strong></p>
-          <p className="text-sm text-gray-600">Diferença: <strong className={closeResult.diferenca === 0 ? 'text-green-600' : 'text-amber-600'}>{formatCurrency(closeResult.diferenca)}</strong></p>
+          <p className="text-sm text-gray-600">Saldo esperado: <strong>{formatBRL(closeResult.saldoEsperado)}</strong></p>
+          <p className="text-sm text-gray-600">Diferença: <strong className={closeResult.diferenca === 0 ? 'text-green-600' : 'text-amber-600'}>{formatBRL(closeResult.diferenca)}</strong></p>
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-gray-500">Carregando...</div>
       ) : current ? (
         <>
@@ -212,7 +204,7 @@ export function CashRegisterPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Troco Inicial</p>
-                <p className="text-lg font-bold text-gray-900">{formatCurrency(current.valorTrocoInicial)}</p>
+                <p className="text-lg font-bold text-gray-900">{formatBRL(current.valorTrocoInicial)}</p>
               </div>
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Vendas (qtd)</p>
@@ -220,35 +212,15 @@ export function CashRegisterPage() {
               </div>
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Total em Vendas</p>
-                <p className="text-lg font-bold text-gray-900">{formatCurrency(current.totalVendas)}</p>
+                <p className="text-lg font-bold text-gray-900">{formatBRL(current.totalVendas)}</p>
               </div>
               <div className="bg-brand-50 p-3 rounded-lg border border-brand-200">
                 <p className="text-xs text-brand-600 mb-1">Saldo Esperado</p>
-                <p className="text-lg font-bold text-brand-700">{formatCurrency(saldoEsperado)}</p>
+                <p className="text-lg font-bold text-brand-700">{formatBRL(saldoEsperado)}</p>
               </div>
             </div>
             {current.cashTransactions.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Movimentações</h3>
-                <div className="space-y-2">
-                  {current.cashTransactions.map(tx => (
-                    <div key={tx.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${tx.tipo === 'SANGRIA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                          {tx.tipo === 'SANGRIA' ? 'Sangria' : 'Suprimento'}
-                        </span>
-                        <span className="text-sm text-gray-600 ml-2">{tx.descricao}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-semibold ${tx.tipo === 'SANGRIA' ? 'text-red-600' : 'text-green-600'}`}>
-                          {tx.tipo === 'SANGRIA' ? '-' : '+'}{formatCurrency(tx.valor)}
-                        </p>
-                        <p className="text-xs text-gray-400">{format(new Date(tx.createdAt), 'HH:mm')}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <CashTransactionList transactions={current.cashTransactions} showTime />
             )}
           </div>
 
@@ -282,11 +254,11 @@ export function CashRegisterPage() {
                           <td className="py-3">{format(new Date(r.dataAbertura), 'dd/MM HH:mm')}</td>
                           <td className="py-3">{r.dataFechamento ? format(new Date(r.dataFechamento), 'dd/MM HH:mm') : '-'}</td>
                           <td className="py-3">{r.user.nome}</td>
-                          <td className="py-3 text-right">{formatCurrency(r.valorTrocoInicial)}</td>
-                          <td className="py-3 text-right">{esperado !== null ? formatCurrency(esperado) : '-'}</td>
-                          <td className="py-3 text-right">{fechamento !== null ? formatCurrency(fechamento) : '-'}</td>
+                          <td className="py-3 text-right">{formatBRL(r.valorTrocoInicial)}</td>
+                          <td className="py-3 text-right">{esperado !== null ? formatBRL(esperado) : '-'}</td>
+                          <td className="py-3 text-right">{fechamento !== null ? formatBRL(fechamento) : '-'}</td>
                           <td className={`py-3 text-right font-medium ${diferenca !== null && diferenca !== 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                            {diferenca !== null ? formatCurrency(diferenca) : '-'}
+                            {diferenca !== null ? formatBRL(diferenca) : '-'}
                           </td>
                           <td className="py-3 text-right">{r._count.sales}</td>
                           <td className="py-3 text-right">
@@ -299,13 +271,7 @@ export function CashRegisterPage() {
                 </table>
               </div>
             )}
-            {totalPages > 1 && (
-              <div className="flex justify-center gap-2 mt-4">
-                <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 text-sm bg-gray-100 rounded disabled:opacity-50">Anterior</button>
-                <span className="px-3 py-1 text-sm text-gray-500">Página {page} de {totalPages}</span>
-                <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1 text-sm bg-gray-100 rounded disabled:opacity-50">Próxima</button>
-              </div>
-            )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </>
       ) : (
@@ -316,10 +282,8 @@ export function CashRegisterPage() {
       )}
 
       {openModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Abrir Caixa</h2>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Troco Inicial</label>
+        <Modal open={openModal} onClose={() => setOpenModal(false)} size="sm" title="Abrir Caixa" rounded="xl" className="mx-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Troco Inicial</label>
             <input type="number" step="0.01" value={trocoInicial} onChange={e => setTrocoInicial(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4" />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setOpenModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
@@ -327,15 +291,12 @@ export function CashRegisterPage() {
                 {saving ? 'Abrindo...' : 'Abrir Caixa'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {closeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Fechar Caixa</h2>
-            <p className="text-sm text-gray-500 mb-4">Saldo esperado: <strong className="text-brand-700">{formatCurrency(saldoEsperado)}</strong></p>
+        <Modal open={closeModal} onClose={() => setCloseModal(false)} size="sm" title="Fechar Caixa" rounded="xl" className="mx-4">
+          <p className="text-sm text-gray-500 mb-4">Saldo esperado: <strong className="text-brand-700">{formatBRL(saldoEsperado)}</strong></p>
             <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total no Caixa</label>
             <input
               type="number" step="0.01" value={valorFechamento}
@@ -343,7 +304,7 @@ export function CashRegisterPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4"
             />
             <p className={`text-sm mb-4 ${Number(valorFechamento) !== saldoEsperado ? 'text-amber-600 font-medium' : 'text-green-600 font-medium'}`}>
-              Diferença: {formatCurrency(Number(valorFechamento) - saldoEsperado)}
+              Diferença: {formatBRL(Number(valorFechamento) - saldoEsperado)}
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setCloseModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
@@ -351,14 +312,12 @@ export function CashRegisterPage() {
                 {saving ? 'Fechando...' : 'Fechar Caixa'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {reportModal && report && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setReportModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
+        <Modal open={reportModal} onClose={() => setReportModal(false)} size="lg">
+          <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">Relatório de Fechamento</h2>
               <button onClick={() => setReportModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
@@ -375,27 +334,27 @@ export function CashRegisterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white border border-gray-200 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Troco Inicial</p>
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(report.totais.trocoInicial)}</p>
+                  <p className="text-lg font-bold text-gray-900">{formatBRL(report.totais.trocoInicial)}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Total em Vendas</p>
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(report.totais.totalVendas)}</p>
+                  <p className="text-lg font-bold text-gray-900">{formatBRL(report.totais.totalVendas)}</p>
                   <p className="text-xs text-gray-400">{report.totais.quantidadeVendas} venda(s)</p>
                 </div>
                 <div className="bg-brand-50 border border-brand-200 rounded-xl p-4">
                   <p className="text-xs text-brand-600 mb-1">Saldo Esperado</p>
-                  <p className="text-lg font-bold text-brand-700">{formatCurrency(report.totais.saldoEsperado)}</p>
+                  <p className="text-lg font-bold text-brand-700">{formatBRL(report.totais.saldoEsperado)}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Valor Declarado</p>
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(report.totais.valorDeclarado)}</p>
+                  <p className="text-lg font-bold text-gray-900">{formatBRL(report.totais.valorDeclarado)}</p>
                 </div>
               </div>
 
               <div className={`rounded-xl p-4 border ${report.totais.diferenca === 0 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                 <p className="text-xs text-gray-500 mb-1">Diferença</p>
                 <p className={`text-2xl font-bold ${report.totais.diferenca === 0 ? 'text-green-600' : 'text-amber-600'}`}>
-                  {formatCurrency(report.totais.diferenca)}
+                  {formatBRL(report.totais.diferenca)}
                 </p>
                 {report.totais.diferenca !== 0 && (
                   <p className="text-xs text-amber-700 mt-1">Valor declarado difere do esperado. Verifique o caixa.</p>
@@ -408,7 +367,7 @@ export function CashRegisterPage() {
                   {Object.entries(report.totais.porFormaPagamento).map(([method, value]) => (
                     <div key={method} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium text-gray-700">{method}</span>
-                      <span className="text-sm font-semibold text-gray-900">{formatCurrency(value)}</span>
+                      <span className="text-sm font-semibold text-gray-900">{formatBRL(value)}</span>
                     </div>
                   ))}
                   {Object.keys(report.totais.porFormaPagamento).length === 0 && (
@@ -418,24 +377,7 @@ export function CashRegisterPage() {
               </div>
 
               {report.cashRegister.cashTransactions?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Movimentações</h3>
-                  <div className="space-y-2">
-                    {report.cashRegister.cashTransactions.map((tx) => (
-                      <div key={tx.id} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded ${tx.tipo === 'SANGRIA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                            {tx.tipo === 'SANGRIA' ? 'Sangria' : 'Suprimento'}
-                          </span>
-                          <span className="text-sm text-gray-600 ml-2">{tx.descricao}</span>
-                        </div>
-                        <span className={`text-sm font-semibold ${tx.tipo === 'SANGRIA' ? 'text-red-600' : 'text-green-600'}`}>
-                          {tx.tipo === 'SANGRIA' ? '-' : '+'}{formatCurrency(tx.valor)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CashTransactionList transactions={report.cashRegister.cashTransactions} />
               )}
             </div>
 
@@ -444,15 +386,12 @@ export function CashRegisterPage() {
                 Imprimir Relatório
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {transModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{transTipo === 'SANGRIA' ? 'Registrar Sangria' : 'Registrar Suprimento'}</h2>
-            <div className="mb-4">
+        <Modal open={transModal} onClose={() => setTransModal(false)} size="sm" title={transTipo === 'SANGRIA' ? 'Registrar Sangria' : 'Registrar Suprimento'} rounded="xl" className="mx-4">
+          <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
               <select value={transTipo} onChange={e => setTransTipo(e.target.value as 'SANGRIA' | 'SUPRIMENTO')} className="w-full border border-gray-300 rounded-lg px-3 py-2">
                 <option value="SANGRIA">Sangria (retirada)</option>
@@ -469,8 +408,7 @@ export function CashRegisterPage() {
                 {saving ? 'Registrando...' : 'Registrar'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

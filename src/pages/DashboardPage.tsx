@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
-import { TrendingUp, TrendingDown, Calendar, Package, ShoppingBag, AlertCircle, PlayCircle } from 'lucide-react';
-import { fetchApi } from '../lib/api';
-import toast from 'react-hot-toast';
+import { TrendingUp, TrendingDown, Calendar, Package, ShoppingBag, AlertCircle, ShieldAlert, History } from 'lucide-react';
 import { subDays, startOfMonth, format, subMonths, endOfMonth } from 'date-fns';
 import { useApiQuery, useSuperAdminDashboard } from '../lib/query';
+import { MetricCard } from '../components/MetricCard';
+import { VarreduraFinanceiraModal } from '../components/VarreduraFinanceiraModal';
 import { PersonalDashboardPage } from './PersonalDashboardPage';
+import { formatDateTimeBR } from '../lib/dates';
 
 export function DashboardPage() {
   const { user, activeWorkspace, activeStoreId, loading: authLoading } = useAuth();
   const [dateFilter, setDateFilter] = useState('THIS_MONTH');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [scanModalOpen, setScanModalOpen] = useState(false);
 
   // Calcula parâmetros de data (executa antes de qualquer early return para manter consistência de hooks)
   const today = new Date();
@@ -39,6 +41,11 @@ export function DashboardPage() {
   // Requisições usando React Query (sempre chamadas, mesma ordem em todo render)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' && !user?.isImpersonating;
   const { data: superAdmData, isError: errorSuperAdm } = useSuperAdminDashboard(isSuperAdmin);
+  const { data: scanRuns, refetch: refetchScanRuns } = useApiQuery<any[]>(
+    ['super-admin', 'scan-runs'],
+    '/super-admin/scan/runs',
+    { enabled: isSuperAdmin, retry: false }
+  );
   const workspaceTipoResolved = !isSuperAdmin ? !!activeWorkspace : true;
   const { data: tenantData, isLoading: loadingTenant, isError: errorTenant } = useApiQuery<any>(
     ['dashboard', 'tenant', activeStoreId, start, end],
@@ -94,6 +101,7 @@ export function DashboardPage() {
       </div>;
     }
     const formatBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+    const ultimaVarredura = scanRuns?.[0];
     return (
       <div className="space-y-4 md:space-y-6">
         <div className="flex justify-between items-center">
@@ -101,41 +109,63 @@ export function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-          <MetricCard title="MRR (Receita Recorrente)" value={formatBRL(superAdmData.mrr)} color="green" />
+          <MetricCard title="MRR (Receita Recorrente)" value={formatBRL(superAdmData.mrr)} color="green" trend={{ value: superAdmData.mrrDelta, positive: true }} />
           <MetricCard title="Lojas Pagantes" value={String(superAdmData.lojasAtivas)} subtitle={`de ${superAdmData.totalLojas} lojas`} color="brand" />
           <MetricCard title="Clientes Totais" value={String(superAdmData.totalClientes)} subtitle={`${superAdmData.totalUsuarios} usuários`} color="purple" />
-          <MetricCard title="Inadimplentes" value={String(superAdmData.inadimplentes)} subtitle={`${superAdmData.churnRate}% churn rate`} color="red" />
+          <MetricCard
+            title="Inadimplentes"
+            value={String(superAdmData.inadimplentes)}
+            subtitle={`${superAdmData.churnRate}% taxa de inadimplência · ${superAdmData.churnLojasMes} churn de lojas no mês`}
+            color="red"
+          />
         </div>
 
         {/* Ações Rápidas */}
         <div className="bg-white p-3 md:p-5 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-amber-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-800">Varredura Financeira</h3>
-              <p className="text-xs text-gray-500 mt-1">Dispara manualmente a verificação de boletos vencidos e bloqueio de lojistas inadimplentes.</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-100 p-2 md:p-3 rounded-lg text-amber-600">
+                <ShieldAlert className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Varredura Financeira</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Verificação de boletos vencidos com notificações escalonadas, bloqueio de lojistas inadimplentes e relatório diário.
+                </p>
+                {ultimaVarredura && (
+                  <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                    <History className="w-3 h-3" />
+                    Última execução: {formatDateTimeBR(ultimaVarredura.data)} ({ultimaVarredura.disparadoPor})
+                    {ultimaVarredura.resultado && ` · ${ultimaVarredura.resultado.marcadasVencido} vencido(s), ${ultimaVarredura.resultado.notificacoesEnviadas} e-mail(s)`}
+                  </p>
+                )}
+              </div>
             </div>
             <button
-              onClick={() => {
-                const promise = fetchApi('/super-admin/trigger-billing', { method: 'POST' });
-                toast.promise(promise, {
-                  loading: 'Enfileirando varredura financeira...',
-                  success: 'Varredura iniciada em background!',
-                  error: 'Erro ao enfileirar varredura',
-                });
-              }}
+              onClick={() => setScanModalOpen(true)}
               className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition shadow-sm"
             >
-              <PlayCircle className="w-5 h-5" />
-              Executar Varredura Financeira
+              <ShieldAlert className="w-5 h-5" />
+              Nova Varredura
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-6">
           <MetricCard title="ARPU (Receita por Loja)" value={formatBRL(superAdmData.arpu)} color="blue" />
-          <MetricCard title="LTV (Valor do Cliente)" value={formatBRL(superAdmData.ltv)} color="teal" />
-          <MetricCard title="Novos Clientes (Mês)" value={String(superAdmData.novosClientesMes)} subtitle={`${superAdmData.momGrowth > 0 ? '+' : ''}${superAdmData.momGrowth}% vs mês anterior`} color="emerald" />
-          <MetricCard title="Receita Pendente" value={formatBRL(superAdmData.receitaPendente)} color="amber" />
+          <MetricCard
+            title="LTV (Valor do Cliente)"
+            value={superAdmData.ltv !== null ? formatBRL(superAdmData.ltv) : '—'}
+            subtitle={superAdmData.ltv === null ? 'indisponível: base menor que 30 pagantes' : undefined}
+            color="teal"
+          />
+          <MetricCard
+            title="Novos Clientes (Mês)"
+            value={String(superAdmData.novosClientesMes)}
+            subtitle={`${superAdmData.momGrowth > 0 ? '+' : ''}${superAdmData.momGrowth}% vs mês anterior`}
+            color="emerald"
+          />
+          <MetricCard title="Receita Pendente" value={formatBRL(superAdmData.receitaPendente)} subtitle="PENDENTE + VENCIDO em aberto" color="amber" />
         </div>
 
         <div className="bg-white p-3 md:p-5 rounded-xl shadow-sm border border-gray-200">
@@ -156,21 +186,12 @@ export function DashboardPage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      </div>
-    );
-  }
 
-  function MetricCard({ title, value, subtitle, color }: { title: string; value: string; subtitle?: string; color: string }) {
-    const colors: Record<string, string> = {
-      brand: 'border-t-brand-500', green: 'border-t-emerald-500', purple: 'border-t-purple-500',
-      red: 'border-t-red-500', blue: 'border-t-blue-500', teal: 'border-t-teal-500',
-      emerald: 'border-t-emerald-500', amber: 'border-t-amber-500',
-    };
-    return (
-      <div className={`bg-white p-3 md:p-5 rounded-xl shadow-sm border border-gray-200 border-t-4 ${colors[color] || colors.brand}`}>
-        <h3 className="text-xs md:text-sm font-medium text-gray-500">{title}</h3>
-        <p className="text-sm md:text-3xl font-bold mt-0 md:mt-2 text-gray-900 leading-tight">{value}</p>
-        {subtitle && <p className="text-[10px] md:text-xs text-gray-400 mt-0 md:mt-1">{subtitle}</p>}
+        <VarreduraFinanceiraModal
+          open={scanModalOpen}
+          onClose={() => setScanModalOpen(false)}
+          onExecuted={() => refetchScanRuns()}
+        />
       </div>
     );
   }
@@ -441,7 +462,7 @@ export function DashboardPage() {
                 pjData.ultimasVendas.map((venda: { id: string; data: string; cliente: string; pagamento: string; valor: number }) => (
                   <tr key={venda.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-500">
-                      {new Date(venda.data).toLocaleString('pt-BR')}
+                      {formatDateTimeBR(venda.data)}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-900">{venda.cliente}</td>
                     <td className="px-4 py-3">

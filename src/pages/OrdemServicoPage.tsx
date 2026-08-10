@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import toast from 'react-hot-toast';
+import { formatDateBR, formatDateTimeBR } from '../lib/dates';
+import { Modal } from '../components/Modal';
+import { StatusActions } from '../components/StatusActions';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
+import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_STATUS_COLORS } from '../utils/domainMaps';
 
 interface Customer { id: string; nomeCompleto: string; telefoneWhatsapp: string; }
 interface Product { id: string; nome: string; qtdEstoqueAtual: number; precoVendaSugerido: number; }
@@ -26,23 +32,9 @@ interface ServiceOrder {
   items: OsItem[];
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  ABERTO: 'Aberto', EM_ANDAMENTO: 'Em Andamento', AGUARDANDO_PECAS: 'Aguardando Peças',
-  CONCLUIDO: 'Concluído', ENTREGUE: 'Entregue', CANCELADO: 'Cancelado',
-};
 
-const STATUS_COLORS: Record<string, string> = {
-  ABERTO: 'bg-blue-100 text-blue-700', EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700',
-  AGUARDANDO_PECAS: 'bg-orange-100 text-orange-700', CONCLUIDO: 'bg-green-100 text-green-700',
-  ENTREGUE: 'bg-gray-100 text-gray-700', CANCELADO: 'bg-red-100 text-red-700',
-};
 
 export function OrdemServicoPage() {
-  const [orders, setOrders] = useState<ServiceOrder[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
 
   const [modal, setModal] = useState<'criar' | 'detalhe' | null>(null);
@@ -53,20 +45,26 @@ export function OrdemServicoPage() {
   });
   const [formItems, setFormItems] = useState<OsItem[]>([]);
 
-  const loadData = () => {
-    setLoading(true);
-    Promise.all([
-      fetchApi('/service-orders'),
-      fetchApi('/customers'),
-      fetchApi('/products?status=ATIVO'),
-      fetchApi('/service-orders/service-types'),
-    ])
-      .then(([o, c, p, st]) => { setOrders(o); setCustomers(c); setProducts(p); setServiceTypes(st); })
-      .catch(() => toast.error('Erro ao carregar dados'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { loadData(); }, []);
+  const { data: orders = [], isLoading, refetch: refetchOrders } = useApiQuery<ServiceOrder[]>(
+    ['service-orders'],
+    '/service-orders',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: customers = [] } = useApiQuery<Customer[]>(
+    ['customers'],
+    '/customers',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: products = [] } = useApiQuery<Product[]>(
+    ['products', 'ativos'],
+    '/products?status=ATIVO',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const { data: serviceTypes = [] } = useApiQuery<ServiceType[]>(
+    ['service-orders', 'service-types'],
+    '/service-orders/service-types',
+    { staleTime: STALE_TIMES.STATIC }
+  );
 
   const openCreate = () => {
     setForm({ customerId: '', descricao: '', observacoes: '', dataPrevisao: '', modeloEquipamento: '', numeroSerie: '', garantiaDias: '' });
@@ -131,7 +129,7 @@ export function OrdemServicoPage() {
       });
       toast.success(`OS #${res.osNumber} criada!`);
       setModal(null);
-      loadData();
+      refetchOrders();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao criar OS'); }
   };
 
@@ -141,7 +139,7 @@ export function OrdemServicoPage() {
       if (res.error) { toast.error(res.error); return; }
       toast.success('Status atualizado!');
       setModal(null);
-      loadData();
+      refetchOrders();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
 
@@ -149,9 +147,8 @@ export function OrdemServicoPage() {
     !filter || o.osNumber.toString().includes(filter) || o.customer?.nomeCompleto.toLowerCase().includes(filter.toLowerCase())
   );
 
-  const formatCurrency = (v: number | string) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v));
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
-  const formatDateTime = (d: string) => new Date(d).toLocaleString('pt-BR');
+  const formatDate = (d: string) => formatDateBR(d);
+  const formatDateTime = (d: string) => formatDateTimeBR(d);
 
   return (
     <div className="space-y-6">
@@ -185,7 +182,7 @@ export function OrdemServicoPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (
+              {isLoading ? (
                 <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">Carregando...</td></tr>
               ) : filteredOrders.map(o => (
                 <tr key={o.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openDetail(o.id)}>
@@ -193,11 +190,11 @@ export function OrdemServicoPage() {
                   <td className="px-6 py-4">{o.customer?.nomeCompleto || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{o.modeloEquipamento || '-'}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[o.status] || ''}`}>
-                      {STATUS_LABELS[o.status] || o.status}
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${SERVICE_ORDER_STATUS_COLORS[o.status] || ''}`}>
+                      {SERVICE_ORDER_STATUS_LABELS[o.status] || o.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-medium">{formatCurrency(o.valorTotal)}</td>
+                  <td className="px-6 py-4 font-medium">{formatBRL(o.valorTotal)}</td>
                   <td className="px-6 py-4 text-gray-500 text-xs">{formatDateTime(o.dataEntrada)}</td>
                   <td className="px-6 py-4">
                     <button onClick={(e) => { e.stopPropagation(); openDetail(o.id); }}
@@ -205,7 +202,7 @@ export function OrdemServicoPage() {
                   </td>
                 </tr>
               ))}
-              {!loading && filteredOrders.length === 0 && (
+              {!isLoading && filteredOrders.length === 0 && (
                 <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">Nenhuma OS encontrada</td></tr>
               )}
             </tbody>
@@ -215,13 +212,8 @@ export function OrdemServicoPage() {
 
       {/* MODAL: Criar OS */}
       {modal === 'criar' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
-              <h3 className="text-lg font-bold text-gray-900">Nova Ordem de Serviço</h3>
-              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            <div className="p-6 space-y-6">
+        <Modal open onClose={() => setModal(null)} title="Nova Ordem de Serviço" size="xl">
+          <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
@@ -294,7 +286,7 @@ export function OrdemServicoPage() {
                       <input type="number" placeholder="R$" className="col-span-2 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                         value={item.precoUnitario} onChange={e => updateItem(i, 'precoUnitario', Number(e.target.value))} min={0} step={0.01} />
                       <div className="col-span-1 flex items-center text-sm font-medium text-gray-700">
-                        {formatCurrency(item.valorTotal)}
+                        {formatBRL(item.valorTotal)}
                       </div>
                       <button onClick={() => removeItem(i)} className="col-span-1 text-red-500 hover:text-red-700 text-lg leading-none mt-1">&times;</button>
                     </div>
@@ -302,7 +294,7 @@ export function OrdemServicoPage() {
                 ))}
                 {formItems.length > 0 && (
                   <div className="text-right text-lg font-bold text-gray-900 pt-2 border-t border-gray-200">
-                    Total: {formatCurrency(calcTotal(formItems))}
+                    Total: {formatBRL(calcTotal(formItems))}
                   </div>
                 )}
               </div>
@@ -313,35 +305,29 @@ export function OrdemServicoPage() {
                   value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="py-4 border-t border-gray-200 flex justify-end gap-3">
               <button onClick={() => setModal(null)} className="px-5 py-2 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Cancelar</button>
               <button onClick={handleCreate} className="px-5 py-2 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700 transition shadow-sm">Criar OS</button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Detalhes OS */}
       {modal === 'detalhe' && selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
-              <h3 className="text-lg font-bold text-gray-900">OS #{selected.osNumber}</h3>
-              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            <div className="p-6 space-y-6">
+        <Modal open onClose={() => setModal(null)} title={`OS #${selected.osNumber}`} size="xl">
+          <div className="space-y-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[selected.status] || ''}`}>
-                    {STATUS_LABELS[selected.status] || selected.status}
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${SERVICE_ORDER_STATUS_COLORS[selected.status] || ''}`}>
+                    {SERVICE_ORDER_STATUS_LABELS[selected.status] || selected.status}
                   </span>
                   <p className="text-sm text-gray-500 mt-1">Aberta em {formatDateTime(selected.dataEntrada)}</p>
                   {selected.dataConclusao && <p className="text-sm text-gray-500">Concluída em {formatDateTime(selected.dataConclusao)}</p>}
                   {selected.dataEntrega && <p className="text-sm text-gray-500">Entregue em {formatDateTime(selected.dataEntrega)}</p>}
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(selected.valorTotal)}</p>
-                  <p className="text-xs text-gray-500">Mão de obra: {formatCurrency(selected.maoDeObraValor)} / Peças: {formatCurrency(selected.pecasValor)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatBRL(selected.valorTotal)}</p>
+                  <p className="text-xs text-gray-500">Mão de obra: {formatBRL(selected.maoDeObraValor)} / Peças: {formatBRL(selected.pecasValor)}</p>
                 </div>
               </div>
 
@@ -377,8 +363,8 @@ export function OrdemServicoPage() {
                         </td>
                         <td className="py-2">{item.descricao}</td>
                         <td className="py-2 text-right">{Number(item.quantidade)}</td>
-                        <td className="py-2 text-right">{formatCurrency(item.precoUnitario)}</td>
-                        <td className="py-2 text-right font-medium">{formatCurrency(item.valorTotal)}</td>
+                        <td className="py-2 text-right">{formatBRL(item.precoUnitario)}</td>
+                        <td className="py-2 text-right font-medium">{formatBRL(item.valorTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -390,29 +376,18 @@ export function OrdemServicoPage() {
               )}
 
               {/* Actions */}
-              <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
-                {selected.status === 'ABERTO' && (
-                  <button onClick={() => transition(selected.id, 'start')} className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-yellow-700">Iniciar Serviço</button>
-                )}
-                {selected.status === 'EM_ANDAMENTO' && (
-                  <>
-                    <button onClick={() => transition(selected.id, 'waiting-parts')} className="bg-orange-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-orange-700">Aguardando Peças</button>
-                    <button onClick={() => transition(selected.id, 'complete')} className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-green-700">Concluir</button>
-                  </>
-                )}
-                {selected.status === 'AGUARDANDO_PECAS' && (
-                  <button onClick={() => transition(selected.id, 'complete')} className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-green-700">Concluir</button>
-                )}
-                {selected.status === 'CONCLUIDO' && (
-                  <button onClick={() => transition(selected.id, 'deliver', { formaPagamento: 'DINHEIRO' })} className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-brand-700">Entregar</button>
-                )}
-                {!['ENTREGUE', 'CANCELADO'].includes(selected.status) && (
-                  <button onClick={() => transition(selected.id, 'cancel')} className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-700">Cancelar OS</button>
-                )}
-              </div>
+              <StatusActions
+                status={selected.status}
+                actions={[
+                  { when: 'ABERTO', label: 'Iniciar Serviço', color: 'yellow', onClick: () => transition(selected.id, 'start') },
+                  { when: 'EM_ANDAMENTO', label: 'Aguardando Peças', color: 'orange', onClick: () => transition(selected.id, 'waiting-parts') },
+                  { when: ['EM_ANDAMENTO', 'AGUARDANDO_PECAS'], label: 'Concluir', color: 'green', onClick: () => transition(selected.id, 'complete') },
+                  { when: 'CONCLUIDO', label: 'Entregar', color: 'brand', onClick: () => transition(selected.id, 'deliver', { formaPagamento: 'DINHEIRO' }) },
+                ]}
+                cancel={{ label: 'Cancelar OS', hideFor: ['ENTREGUE', 'CANCELADO'], onClick: () => transition(selected.id, 'cancel') }}
+              />
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

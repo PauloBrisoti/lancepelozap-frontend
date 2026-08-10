@@ -1,28 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import type { PurchaseOrder, PurchaseItem, Customer, Product } from '../types/api';
-
-const STATUS_LABELS: Record<string, string> = {
-  RASCUNHO: 'Rascunho',
-  PENDENTE: 'Pendente',
-  PARCIAL: 'Recebido Parcial',
-  RECEBIDO: 'Recebido',
-  CANCELADO: 'Cancelado',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  RASCUNHO: 'bg-gray-100 text-gray-700',
-  PENDENTE: 'bg-blue-100 text-blue-700',
-  PARCIAL: 'bg-amber-100 text-amber-700',
-  RECEBIDO: 'bg-green-100 text-green-700',
-  CANCELADO: 'bg-red-100 text-red-700',
-};
-
-function formatCurrency(value: number | string) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
-}
+import { Modal } from '../components/Modal';
+import { Pagination } from '../components/Pagination';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { formatBRL } from '../utils/format';
+import { PURCHASE_STATUS_LABELS, PURCHASE_STATUS_COLORS } from '../utils/domainMaps';
 
 interface OrderItemForm {
   productId: string;
@@ -32,9 +17,6 @@ interface OrderItemForm {
 }
 
 export function ComprasPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -62,42 +44,37 @@ export function ComprasPage() {
   const [formValorEntrada, setFormValorEntrada] = useState('');
   const [formWalletIdEntrada, setFormWalletIdEntrada] = useState('');
   const [formCreditCardId, setFormCreditCardId] = useState('');
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [creditCards, setCreditCards] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceTarget, setInvoiceTarget] = useState<{ cardId: string; cardNome: string; mes: string; total: number } | null>(null);
   const [invoiceWalletId, setInvoiceWalletId] = useState('');
 
   const limit = 20;
 
-  useEffect(() => {
-    loadOrders();
-    loadInvoices();
-    loadPaymentOptions();
-  }, [page, statusFilter]);
+  const { data: ordersData, isLoading, refetch } = useApiQuery<{ data: any[]; total: number }>(
+    ['purchases', page, statusFilter],
+    `/purchases?page=${page}&limit=${limit}${statusFilter ? `&status=${statusFilter}` : ''}`,
+    { staleTime: STALE_TIMES.NORMAL }
+  );
+  const orders = ordersData?.data ?? [];
+  const total = ordersData?.total ?? 0;
 
-  const loadInvoices = async () => {
-    try {
-      const data = await fetchApi('/purchases/cards/invoices');
-      setInvoices(Array.isArray(data) ? data : []);
-    } catch { setInvoices([]); }
-  };
+  const { data: invoices = [], refetch: refetchInvoices } = useApiQuery<any[]>(
+    ['purchases', 'invoices'],
+    '/purchases/cards/invoices',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
-  const loadOrders = async () => {
-    try {
-      setLoading(true);
-      let query = `?page=${page}&limit=${limit}`;
-      if (statusFilter) query += `&status=${statusFilter}`;
-      const data = await fetchApi(`/purchases${query}`);
-      setOrders(data.data || []);
-      setTotal(data.total || 0);
-    } catch {
-      toast.error('Erro ao carregar pedidos');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: wallets = [] } = useApiQuery<any[]>(
+    ['finance', 'dashboard'],
+    '/finance/dashboard',
+    { staleTime: STALE_TIMES.NORMAL, select: (d) => (d as any)?.wallets ?? [] }
+  );
+
+  const { data: creditCards = [] } = useApiQuery<any[]>(
+    ['purchases', 'credit-cards'],
+    '/purchases/credit-cards',
+    { staleTime: STALE_TIMES.NORMAL }
+  );
 
   const loadProducts = async () => {
     try {
@@ -120,17 +97,6 @@ export function ComprasPage() {
     } catch { setCustomers([]); }
   };
 
-  const loadPaymentOptions = async () => {
-    try {
-      const dash = await fetchApi('/finance/dashboard');
-      setWallets(dash?.wallets || []);
-    } catch { setWallets([]); }
-    try {
-      const cards = await fetchApi('/purchases/credit-cards');
-      setCreditCards(Array.isArray(cards) ? cards : []);
-    } catch { setCreditCards([]); }
-  };
-
   const openNew = () => {
     setEditingOrder(null);
     setFormSupplierId('');
@@ -151,7 +117,6 @@ export function ComprasPage() {
     loadProducts();
     loadSuppliers();
     loadCustomers();
-    loadPaymentOptions();
     setShowModal(true);
   };
 
@@ -238,8 +203,8 @@ export function ComprasPage() {
       setShowInvoiceModal(false);
       setInvoiceTarget(null);
       setInvoiceWalletId('');
-      loadInvoices();
-      loadOrders();
+      refetchInvoices();
+      refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao pagar fatura');
     } finally { setSaving(false); }
@@ -289,7 +254,7 @@ export function ComprasPage() {
         toast.success('Pedido criado!');
       }
       setShowModal(false);
-      loadOrders();
+      refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
     } finally { setSaving(false); }
@@ -299,7 +264,7 @@ export function ComprasPage() {
     try {
       await fetchApi(`/purchases/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
       toast.success(`Status alterado`);
-      loadOrders();
+      refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
 
@@ -308,7 +273,7 @@ export function ComprasPage() {
     try {
       await fetchApi(`/purchases/${id}`, { method: 'DELETE' });
       toast.success('Pedido excluído');
-      loadOrders();
+      refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao excluir'); }
   };
 
@@ -332,7 +297,7 @@ export function ComprasPage() {
       toast.success('Itens recebidos com sucesso!');
       setShowReceiveModal(false);
       setReceiveOrder(null);
-      loadOrders();
+      refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao receber');
     } finally { setSaving(false); }
@@ -352,7 +317,7 @@ export function ComprasPage() {
       {/* Filtros */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <button onClick={() => { setStatusFilter(''); setPage(1); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!statusFilter ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todos</button>
-        {Object.entries(STATUS_LABELS).map(([key, label]) => (
+        {Object.entries(PURCHASE_STATUS_LABELS).map(([key, label]) => (
           <button key={key} onClick={() => { setStatusFilter(key); setPage(1); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === key ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{label}</button>
         ))}
       </div>
@@ -375,7 +340,7 @@ export function ComprasPage() {
                         <span className="text-xs text-gray-500 ml-2">{mesInv.parcelas} parcela(s) · vencimento {format(new Date(mesInv.vencimento), 'dd/MM')}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(mesInv.total)}</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatBRL(mesInv.total)}</span>
                         <button
                           onClick={() => {
                             setInvoiceTarget({ cardId: inv.card.id, cardNome: inv.card.nome, mes: mesInv.mes, total: mesInv.total });
@@ -397,7 +362,7 @@ export function ComprasPage() {
       )}
 
       {/* Lista */}
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-gray-500">Carregando...</div>
       ) : orders.length === 0 ? (
         <div className="text-center py-12 text-gray-400">Nenhum pedido encontrado</div>
@@ -424,16 +389,16 @@ export function ComprasPage() {
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">#{order.orderNumber}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{order.supplier?.nome || '—'}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(order.valorTotalLiquido)}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatBRL(order.valorTotalLiquido)}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS[order.status] || order.status}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${PURCHASE_STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {PURCHASE_STATUS_LABELS[order.status] || order.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{format(new Date(order.dataPedido), 'dd/MM/yy')}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{order.dataPrevisao ? format(new Date(order.dataPrevisao), 'dd/MM/yy') : '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{order.customer?.nomeCompleto || '—'}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-emerald-700">{order.valorVenda ? formatCurrency(order.valorVenda) : '—'}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-emerald-700">{order.valorVenda ? formatBRL(order.valorVenda) : '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{order.items?.reduce((s: number, i: PurchaseItem) => s + Number(i.quantidade), 0) || 0}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
@@ -468,23 +433,15 @@ export function ComprasPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-4">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">Anterior</button>
-              <span className="px-3 py-1.5 text-sm text-gray-500">Página {page} de {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">Próxima</button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
 
       {/* Modal de Criação/Edição */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingOrder ? `Editar Pedido #${editingOrder.orderNumber}` : 'Novo Pedido'}</h2>
+        <Modal open onClose={() => setShowModal(false)} closeDisabled={saving} title={editingOrder ? `Editar Pedido #${editingOrder.orderNumber}` : 'Novo Pedido'} size="lg">
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
                 <select value={formSupplierId} onChange={e => setFormSupplierId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
@@ -512,8 +469,8 @@ export function ComprasPage() {
               </div>
               {formItems.length === 0 && <p className="text-sm text-gray-400 py-2">Nenhum item adicionado</p>}
               {formItems.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-start mb-2 p-2 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
+                <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center mb-2 p-2 bg-gray-50 rounded-lg">
+                  <div className="flex-1 w-full sm:w-auto">
                     <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
                       <option value="">Selecione</option>
                       {products.map((p: Product) => (
@@ -521,23 +478,25 @@ export function ComprasPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="w-20">
-                    <input type="number" value={item.quantidade} onChange={e => updateItem(idx, 'quantidade', e.target.value)} min="0.001" step="1" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center" />
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="w-20">
+                      <input type="number" value={item.quantidade} onChange={e => updateItem(idx, 'quantidade', e.target.value)} min="0.001" step="1" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center" />
+                    </div>
+                    <div className="w-28">
+                      <input type="number" value={item.precoUnitario} onChange={e => updateItem(idx, 'precoUnitario', e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right" />
+                    </div>
+                    <div className="w-24 text-sm font-medium text-gray-700 sm:pt-1.5 text-right">
+                      {formatBRL(item.quantidade * item.precoUnitario)}
+                    </div>
+                    <button onClick={() => removeItem(idx)} className="p-1.5 text-gray-400 hover:text-red-500 mt-0.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </div>
-                  <div className="w-28">
-                    <input type="number" value={item.precoUnitario} onChange={e => updateItem(idx, 'precoUnitario', e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right" />
-                  </div>
-                  <div className="w-24 text-sm font-medium text-gray-700 pt-1.5 text-right">
-                    {formatCurrency(item.quantidade * item.precoUnitario)}
-                  </div>
-                  <button onClick={() => removeItem(idx)} className="p-1.5 text-gray-400 hover:text-red-500 mt-0.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data da Compra <span className="text-gray-400">(retroativa)</span></label>
                 <input type="date" value={formDataCompra} onChange={e => setFormDataCompra(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -556,7 +515,7 @@ export function ComprasPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Valor de Venda (R$)</label>
                 <input type="number" value={formValorVenda} onChange={e => setFormValorVenda(e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -591,7 +550,7 @@ export function ComprasPage() {
                 </div>
 
                 {formFormaPagamento === 'A_VISTA' && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Carteira de Pagamento</label>
                       <select value={formWalletIdEntrada} onChange={e => setFormWalletIdEntrada(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
@@ -608,7 +567,7 @@ export function ComprasPage() {
                 )}
 
                 {formFormaPagamento === 'PARCELADO_FORNECEDOR' && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
                       <input type="number" value={formNumeroParcelas} onChange={e => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -630,12 +589,12 @@ export function ComprasPage() {
                         ))}
                       </select>
                     </div>
-                    <p className="text-xs text-gray-500 col-span-2 md:col-span-4">Cada parcela vira uma conta a pagar com vencimento — sem saída de caixa no ato.</p>
+                    <p className="text-xs text-gray-500 col-span-1 sm:col-span-2 md:col-span-4">Cada parcela vira uma conta a pagar com vencimento — sem saída de caixa no ato.</p>
                   </div>
                 )}
 
                 {formFormaPagamento === 'CARTAO_CREDITO' && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
                       <input type="number" value={formNumeroParcelas} onChange={e => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -644,7 +603,7 @@ export function ComprasPage() {
                       <label className="block text-xs font-medium text-gray-600 mb-1">1º Vencimento (opcional)</label>
                       <input type="date" value={formPrimeiroVencimento} onChange={e => setFormPrimeiroVencimento(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <label className="block text-xs font-medium text-gray-600 mb-1">Cartão de Crédito</label>
                       <select value={formCreditCardId} onChange={e => setFormCreditCardId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">Selecione o cartão (as parcelas vencem na fatura)</option>
@@ -656,7 +615,7 @@ export function ComprasPage() {
                         ))}
                       </select>
                     </div>
-                    <p className="text-xs text-gray-500 col-span-2 md:col-span-4">Sem saída de caixa no ato: as parcelas agregam na fatura do cartão e são pagas em lote.</p>
+                    <p className="text-xs text-gray-500 col-span-1 sm:col-span-2 md:col-span-4">Sem saída de caixa no ato: as parcelas agregam na fatura do cartão e são pagas em lote.</p>
                   </div>
                 )}
               </div>
@@ -668,7 +627,7 @@ export function ComprasPage() {
             </div>
 
             <div className="text-right text-lg font-bold text-gray-900 mb-4">
-              Total: {formatCurrency(calcTotal())}
+              Total: {formatBRL(calcTotal())}
             </div>
 
             <div className="flex justify-end gap-3">
@@ -677,16 +636,13 @@ export function ComprasPage() {
                 {saving ? 'Salvando...' : editingOrder ? 'Atualizar' : 'Criar Pedido'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal de Pagamento de Fatura */}
       {showInvoiceModal && invoiceTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowInvoiceModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Pagar Fatura {invoiceTarget.cardNome}</h2>
-            <p className="text-sm text-gray-500 mb-4">{format(new Date(invoiceTarget.mes + '-01T12:00:00'), 'MM/yyyy')} · {formatCurrency(invoiceTarget.total)}</p>
+        <Modal open onClose={() => setShowInvoiceModal(false)} closeDisabled={saving} title={`Pagar Fatura ${invoiceTarget.cardNome}`} size="sm">
+            <p className="text-sm text-gray-500 mb-4">{format(new Date(invoiceTarget.mes + '-01T12:00:00'), 'MM/yyyy')} · {formatBRL(invoiceTarget.total)}</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Carteira de Pagamento</label>
               <select value={invoiceWalletId} onChange={e => setInvoiceWalletId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
@@ -702,15 +658,12 @@ export function ComprasPage() {
                 {saving ? 'Pagando...' : 'Confirmar Pagamento'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal de Recebimento */}
       {showReceiveModal && receiveOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowReceiveModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Receber Pedido #{receiveOrder.orderNumber}</h2>
+        <Modal open onClose={() => setShowReceiveModal(false)} closeDisabled={saving} title={`Receber Pedido #${receiveOrder.orderNumber}`} size="md">
             {receiveOrder.supplier?.nome && <p className="text-sm text-gray-500 mb-4">{receiveOrder.supplier.nome}</p>}
 
             <div className="space-y-3 mb-4">
@@ -756,8 +709,7 @@ export function ComprasPage() {
                 {saving ? 'Processando...' : 'Confirmar Recebimento'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
