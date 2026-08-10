@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { fetchApi } from '../lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTransactionForm } from '../hooks/useTransactionForm';
@@ -80,13 +82,16 @@ function parseBRLraw(v: string): number {
   return parseFloat(cleaned) || 0;
 }
 
+const EMPTY_DASH: DashboardData = {
+  ganhos: 0, gastos: 0, sobraMes: 0,
+  variacaoGanhos: 0, variacaoGastos: 0,
+  saudeFinanceira: 'SAUDAVEL', categoriasEstouradas: 0, proporcaoGastos: 0,
+  gastosPorCategoria: [], budgets: [], ultimasTransacoes: [],
+  monthlyBudgetLimit: 0, saldoAcumulado: 0, saldosAcumuladosPorConta: [],
+};
+
 export function PersonalDashboardPage() {
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<'dashboard' | 'transactions' | 'budgets'>('dashboard');
   const formTx = useTransactionForm();
   const [budgetForm, setBudgetForm] = useState<Record<string, string>>({});
@@ -147,46 +152,28 @@ export function PersonalDashboardPage() {
       .finally(() => setConfigLoaded(true));
   }, []);
 
-  useEffect(() => {
-    if (configLoaded) loadAll();
-  }, [mesFilter, anoFilter, configLoaded]);
+  const q = `?mes=${mesFilter}&ano=${anoFilter}`;
+  const dashboardQ = useApiQuery<DashboardData>(['personal-dashboard', mesFilter, anoFilter], '/personal/dashboard' + q, { enabled: configLoaded });
+  const analysisQ = useApiQuery<AIAnalysis>(['personal-ai', mesFilter, anoFilter], '/personal/ai-analysis' + q, { enabled: configLoaded });
+  const transactionsQ = useApiQuery<Transaction[]>(['personal-transactions', mesFilter, anoFilter], '/personal/transactions' + q, { enabled: configLoaded });
+  const categoriesQ = useApiQuery<Category[]>(['personal-categories'], '/personal/categories', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
+  const walletsQ = useApiQuery<Wallet[]>(['personal-wallets'], '/personal/wallets', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
 
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const q = `?mes=${mesFilter}&ano=${anoFilter}`;
-      const results = await Promise.allSettled([
-        fetchApi<DashboardData>('/personal/dashboard' + q),
-        fetchApi<AIAnalysis>('/personal/ai-analysis' + q),
-        fetchApi<Transaction[]>('/personal/transactions' + q),
-        fetchApi<Category[]>('/personal/categories'),
-        fetchApi<Wallet[]>('/personal/wallets'),
-      ]);
-      if (results[0].status === 'fulfilled') setDashboard(results[0].value);
-      else console.error('Dashboard fetch failed', results[0].reason);
-      if (results[1].status === 'fulfilled') setAnalysis(results[1].value);
-      else console.error('Analysis fetch failed', results[1].reason);
-      if (results[2].status === 'fulfilled') setTransactions(results[2].value);
-      else console.error('Transactions fetch failed', results[2].reason);
-      if (results[3].status === 'fulfilled') setCategories(results[3].value);
-      else console.error('Categories fetch failed', results[3].reason);
-      if (results[4].status === 'fulfilled') setWallets(results[4].value);
-      else console.error('Wallets fetch failed', results[4].reason);
-    } catch (err: unknown) {
-      console.error('loadAll error (forçando dados zerados):', err);
-      setDashboard({
-        ganhos: 0, gastos: 0, sobraMes: 0,
-        variacaoGanhos: 0, variacaoGastos: 0,
-        saudeFinanceira: 'SAUDAVEL', categoriasEstouradas: 0, proporcaoGastos: 0,
-        gastosPorCategoria: [], budgets: [], ultimasTransacoes: [],
-        monthlyBudgetLimit: 0, saldoAcumulado: 0, saldosAcumuladosPorConta: [],
-      });
-      setAnalysis({ insights: [], insightsGanhos: [], sobraMes: 0, dicaInvestimento: null, gastosPorCategoria: [] });
-      setTransactions([]); setCategories([]); setWallets([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Estado derivado: fallback zerado quando o fetch falha (comportamento anterior)
+  const dashboard = dashboardQ.data ?? (dashboardQ.isError ? EMPTY_DASH : null);
+  const analysis = analysisQ.data ?? (analysisQ.isError ? { insights: [], insightsGanhos: [], sobraMes: 0, dicaInvestimento: null, gastosPorCategoria: [] } : null);
+  const transactions = transactionsQ.data ?? [];
+  const categories = categoriesQ.data ?? [];
+  const wallets = walletsQ.data ?? [];
+  const loading = dashboardQ.isLoading || analysisQ.isLoading || transactionsQ.isLoading || categoriesQ.isLoading || walletsQ.isLoading;
+
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['personal-ai'] });
+    queryClient.invalidateQueries({ queryKey: ['personal-transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['personal-categories'] });
+    queryClient.invalidateQueries({ queryKey: ['personal-wallets'] });
+  }, [queryClient]);
 
   function openEditTransaction(tx: Transaction) {
     formTx.openEdit(tx);
@@ -222,7 +209,7 @@ export function PersonalDashboardPage() {
       await fetchApi(url, { method, body: JSON.stringify(body) });
       toast.success(formTx.editingTx ? 'Transação atualizada!' : (formTx.tipo === 'ENTRADA' ? 'Ganho registrado!' : 'Gasto registrado!'));
       formTx.close();
-      await loadAll();
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar transação');
     } finally {
@@ -239,8 +226,7 @@ export function PersonalDashboardPage() {
       });
       toast.success('Categoria criada!');
       setCatForm({ nome: '', tipo: 'SAIDA', icone: '💵' });
-      const cats = await fetchApi<Category[]>('/personal/categories');
-      setCategories(cats);
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao criar categoria');
     }
@@ -256,7 +242,7 @@ export function PersonalDashboardPage() {
       localStorage.setItem('pf_cycle_day', String(cycleDay));
       toast.success('Configurações salvas!');
       setShowCycleModal(false);
-      await loadAll();
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
     }
@@ -266,8 +252,7 @@ export function PersonalDashboardPage() {
     try {
       await fetchApi(`/personal/categories/${id}`, { method: 'DELETE' });
       toast.success('Categoria removida');
-      const cats = await fetchApi<Category[]>('/personal/categories');
-      setCategories(cats);
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao remover categoria');
     }
@@ -278,7 +263,7 @@ export function PersonalDashboardPage() {
     try {
       await fetchApi(`/personal/transactions/${id}`, { method: 'DELETE' });
       toast.success('Transação removida');
-      await loadAll();
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao remover');
     }
@@ -297,7 +282,7 @@ export function PersonalDashboardPage() {
         body: JSON.stringify({ categoryId, mes: now.getMonth() + 1, ano: now.getFullYear(), valorLimite: parseBRLraw(valor) }),
       });
       toast.success('Orçamento salvo!');
-      await loadAll();
+      invalidateAll();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar orçamento');
     }

@@ -1,7 +1,9 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect, useMemo, useRef, useCallback, useEffectEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
+import { STALE_TIMES } from '../lib/query';
 import { todayLocalDate, formatBRL } from '../utils/format';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useOfflineSync } from '../hooks/useOfflineSync';
@@ -33,11 +35,50 @@ interface CartItem {
 
 export const PDVPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const [produtos, setProdutos] = useState<Product[]>([]);
-  const [clientes, setClientes] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const { activeStoreId } = useAuth();
   const isOnline = useOnlineStatus();
+  const offlineCacheRef = useRef(false);
+
+  // Produtos com fallback offline (cache local), clientes e taxas via cache React Query
+  const produtosQ = useQuery<Product[]>({
+    queryKey: ['products', activeStoreId],
+    queryFn: async ({ signal }) => {
+      try {
+        const data = await fetchApi<Product[]>('/products', { signal });
+        await cacheProducts(data);
+        offlineCacheRef.current = false;
+        return data;
+      } catch (err) {
+        if (!isOnline) {
+          const cached = await getCachedProducts();
+          if (cached.length > 0) {
+            offlineCacheRef.current = true;
+            return cached;
+          }
+        }
+        throw err;
+      }
+    },
+    staleTime: STALE_TIMES.FREQUENT,
+    retry: 2,
+  });
+  const clientesQ = useQuery<Customer[]>({
+    queryKey: ['customers', activeStoreId],
+    queryFn: ({ signal }) => fetchApi<Customer[]>('/customers', { signal }),
+    staleTime: STALE_TIMES.FREQUENT,
+    retry: 2,
+  });
+  const feesQ = useQuery<any[]>({
+    queryKey: ['payment-fees', activeStoreId],
+    queryFn: ({ signal }) => fetchApi<any[]>('/payment-fees', { signal }).catch(() => []),
+    staleTime: STALE_TIMES.STATIC,
+    retry: 0,
+  });
+
+  const produtos = produtosQ.data ?? [];
+  const clientes = clientesQ.data ?? [];
+  const paymentFees = feesQ.data ?? [];
+  const loading = produtosQ.isLoading || clientesQ.isLoading || feesQ.isLoading;
   const { pendingCount, syncing } = useOfflineSync(isOnline);
   
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
@@ -51,7 +92,6 @@ export const PDVPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [itemEmEdicao, setItemEmEdicao] = useState<CartItem | null>(null);
   const [cartAberto, setCartAberto] = useState(false);
-  const [paymentFees, setPaymentFees] = useState<any[]>([]);
   const [dataVenda, setDataVenda] = useState(() => todayLocalDate());
   const [repasseTaxa, setRepasseTaxa] = useState(false);
 
@@ -175,38 +215,22 @@ export const PDVPage: React.FC = () => {
     repasseTaxa?: boolean;
   } | null>(null);
 
-  const carregarDados = async () => {
-    try {
-      const [prodsRes, cliRes, feesRes] = await Promise.all([
-        fetchApi('/products'),
-        fetchApi('/customers'),
-        fetchApi('/payment-fees').catch(() => [])
-      ]);
-      setProdutos(prodsRes);
-      setClientes(cliRes);
-      setPaymentFees(Array.isArray(feesRes) ? feesRes : []);
-      cacheProducts(prodsRes);
-    } catch (error) {
-      console.error(error);
-      if (!isOnline) {
-        const cached = await getCachedProducts();
-        if (cached.length > 0) {
-          setProdutos(cached);
-          toast('Modo offline — usando dados salvos anteriormente', { icon: '📡' });
-        } else {
-          toast.error('Sem conexão e sem dados em cache. Conecte-se à internet para usar o PDV.');
-        }
-      } else {
-        toast.error((error as Error).message || 'Erro ao carregar dados do PDV.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Feedback de offline/erro (mantém o comportamento da versão anterior)
   useEffect(() => {
-    carregarDados();
-  }, []);
+    if (produtosQ.isSuccess && offlineCacheRef.current) {
+      toast('Modo offline — usando dados salvos anteriormente', { icon: '📡' });
+      offlineCacheRef.current = false;
+    }
+  }, [produtosQ.isSuccess]);
+  useEffect(() => {
+    if (produtosQ.isError) {
+      if (!isOnline) {
+        toast.error('Sem conexão e sem dados em cache. Conecte-se à internet para usar o PDV.');
+      } else {
+        toast.error('Erro ao carregar dados do PDV.');
+      }
+    }
+  }, [produtosQ.isError, isOnline]);
 
   const adicionarAoCarrinho = (prod: Product) => {
     setCarrinho(prev => {
@@ -345,7 +369,7 @@ export const PDVPage: React.FC = () => {
       setCartAberto(false);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
-      carregarDados();
+      queryClient.invalidateQueries({ queryKey: ['products', activeStoreId] });
     } catch (error) {
       console.error(error);
       toast.error((error as Error).message || 'Erro ao finalizar venda.');

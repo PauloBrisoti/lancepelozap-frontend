@@ -4,8 +4,10 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import type { PurchaseOrder, PurchaseItem, Customer, Product } from '../types/api';
 import { Modal } from '../components/Modal';
+import { useModal } from '../hooks/useModal';
 import { Pagination } from '../components/Pagination';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useAuth } from '../context/AuthContext';
 import { formatBRL } from '../utils/format';
 import { PURCHASE_STATUS_LABELS, PURCHASE_STATUS_COLORS } from '../utils/domainMaps';
 
@@ -16,36 +18,49 @@ interface OrderItemForm {
   precoUnitario: number;
 }
 
+interface OrderFormState {
+  supplierId: string;
+  customerId: string;
+  valorVenda: string;
+  items: OrderItemForm[];
+  desconto: number;
+  frete: string;
+  observacoes: string;
+  dataCompra: string;
+  dataPrevisao: string;
+  formaPagamento: 'A_VISTA' | 'PARCELADO_FORNECEDOR' | 'CARTAO_CREDITO';
+  numeroParcelas: number;
+  primeiroVencimento: string;
+  valorEntrada: string;
+  walletIdEntrada: string;
+  creditCardId: string;
+}
+
 export function ComprasPage() {
+  const { activeStoreId } = useAuth();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [showReceiveModal, setShowReceiveModal] = useState(false);
-  const [receiveOrder, setReceiveOrder] = useState<any>(null);
+      const [receiveOrder, setReceiveOrder] = useState<any>(null);
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
   const [editingOrder, setEditingOrder] = useState<any>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const productsQ = useApiQuery<any[]>(['products', activeStoreId], '/products', { staleTime: STALE_TIMES.NORMAL });
+  const suppliersQ = useApiQuery<any[]>(['suppliers', activeStoreId], '/suppliers', { staleTime: STALE_TIMES.NORMAL });
+  const customersQ = useApiQuery<Customer[]>(['customers', activeStoreId], '/customers', { staleTime: STALE_TIMES.NORMAL });
+  const products = productsQ.data ?? [];
+  const suppliers = suppliersQ.data ?? [];
+  const customers = customersQ.data ?? [];
 
-  const [formSupplierId, setFormSupplierId] = useState('');
-  const [formCustomerId, setFormCustomerId] = useState('');
-  const [formValorVenda, setFormValorVenda] = useState('');
-  const [formItems, setFormItems] = useState<OrderItemForm[]>([]);
-  const [formDesconto, setFormDesconto] = useState(0);
-  const [formFrete, setFormFrete] = useState('');
-  const [formObservacoes, setFormObservacoes] = useState('');
-  const [formDataCompra, setFormDataCompra] = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const [formDataPrevisao, setFormDataPrevisao] = useState('');
   const [saving, setSaving] = useState(false);
-  const [formFormaPagamento, setFormFormaPagamento] = useState<'A_VISTA' | 'PARCELADO_FORNECEDOR' | 'CARTAO_CREDITO'>('A_VISTA');
-  const [formNumeroParcelas, setFormNumeroParcelas] = useState(3);
-  const [formPrimeiroVencimento, setFormPrimeiroVencimento] = useState('');
-  const [formValorEntrada, setFormValorEntrada] = useState('');
-  const [formWalletIdEntrada, setFormWalletIdEntrada] = useState('');
-  const [formCreditCardId, setFormCreditCardId] = useState('');
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [invoiceTarget, setInvoiceTarget] = useState<{ cardId: string; cardNome: string; mes: string; total: number } | null>(null);
+  const orderModal = useModal();
+  const receiveModal = useModal();
+  const invoiceModal = useModal();
+  const [formOrder, setFormOrder] = useState<OrderFormState>({
+    supplierId: '', customerId: '', valorVenda: '', items: [], desconto: 0, frete: '',
+    observacoes: '', dataCompra: format(new Date(), 'yyyy-MM-dd'), dataPrevisao: '',
+    formaPagamento: 'A_VISTA', numeroParcelas: 3, primeiroVencimento: '', valorEntrada: '',
+    walletIdEntrada: '', creditCardId: '',
+  });
+    const [invoiceTarget, setInvoiceTarget] = useState<{ cardId: string; cardNome: string; mes: string; total: number } | null>(null);
   const [invoiceWalletId, setInvoiceWalletId] = useState('');
 
   const limit = 20;
@@ -76,72 +91,46 @@ export function ComprasPage() {
     { staleTime: STALE_TIMES.NORMAL }
   );
 
-  const loadProducts = async () => {
-    try {
-      const data = await fetchApi('/products');
-      setProducts(Array.isArray(data) ? data : []);
-    } catch { setProducts([]); }
-  };
-
-  const loadSuppliers = async () => {
-    try {
-      const data = await fetchApi('/suppliers');
-      setSuppliers(Array.isArray(data) ? data : []);
-    } catch { setSuppliers([]); }
-  };
-
-  const loadCustomers = async () => {
-    try {
-      const data = await fetchApi('/customers');
-      setCustomers(Array.isArray(data) ? data : []);
-    } catch { setCustomers([]); }
-  };
-
   const openNew = () => {
     setEditingOrder(null);
-    setFormSupplierId('');
-    setFormCustomerId('');
-    setFormValorVenda('');
-    setFormItems([]);
-    setFormDesconto(0);
-    setFormFrete('');
-    setFormObservacoes('');
-    setFormDataCompra(format(new Date(), 'yyyy-MM-dd'));
-    setFormDataPrevisao('');
-    setFormFormaPagamento('A_VISTA');
-    setFormNumeroParcelas(3);
-    setFormPrimeiroVencimento('');
-    setFormValorEntrada('');
-    setFormWalletIdEntrada('');
-    setFormCreditCardId('');
-    loadProducts();
-    loadSuppliers();
-    loadCustomers();
-    setShowModal(true);
+    setFormOrder({
+      supplierId: '', customerId: '', valorVenda: '', items: [], desconto: 0, frete: '',
+      observacoes: '', dataCompra: format(new Date(), 'yyyy-MM-dd'), dataPrevisao: '',
+      formaPagamento: 'A_VISTA', numeroParcelas: 3, primeiroVencimento: '', valorEntrada: '',
+      walletIdEntrada: '', creditCardId: '',
+    });
+    void productsQ.refetch();
+    void suppliersQ.refetch();
+    void customersQ.refetch();
+    orderModal.openModal();
   };
 
   const openEdit = async (order: PurchaseOrder) => {
     try {
       const data = await fetchApi(`/purchases/${order.id}`);
       setEditingOrder(data);
-      setFormSupplierId(data.supplier?.id || '');
-      setFormCustomerId(data.customer?.id || '');
-      setFormValorVenda(data.valorVenda ? String(Number(data.valorVenda)) : '');
-      setFormItems(data.items.map((i: PurchaseItem) => ({
-        productId: i.product.id,
-        nome: i.product.nome,
-        quantidade: Number(i.quantidade),
-        precoUnitario: Number(i.precoUnitario),
-      })));
-      setFormDesconto(Number(data.valorDesconto));
-      setFormFrete(data.valorFrete ? String(Number(data.valorFrete)) : '');
-      setFormObservacoes(data.observacoes || '');
-      setFormDataCompra(data.dataPedido ? format(new Date(data.dataPedido), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
-      setFormDataPrevisao(data.dataPrevisao ? format(new Date(data.dataPrevisao), 'yyyy-MM-dd') : '');
-      loadProducts();
-      loadSuppliers();
-      loadCustomers();
-      setShowModal(true);
+      setFormOrder({
+        supplierId: data.supplier?.id || '',
+        customerId: data.customer?.id || '',
+        valorVenda: data.valorVenda ? String(Number(data.valorVenda)) : '',
+        items: data.items.map((i: PurchaseItem) => ({
+          productId: i.product.id,
+          nome: i.product.nome,
+          quantidade: Number(i.quantidade),
+          precoUnitario: Number(i.precoUnitario),
+        })),
+        desconto: Number(data.valorDesconto),
+        frete: data.valorFrete ? String(Number(data.valorFrete)) : '',
+        observacoes: data.observacoes || '',
+        dataCompra: data.dataPedido ? format(new Date(data.dataPedido), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        dataPrevisao: data.dataPrevisao ? format(new Date(data.dataPrevisao), 'yyyy-MM-dd') : '',
+        formaPagamento: 'A_VISTA', numeroParcelas: 3, primeiroVencimento: '',
+        valorEntrada: '', walletIdEntrada: '', creditCardId: '',
+      });
+      void productsQ.refetch();
+      void suppliersQ.refetch();
+      void customersQ.refetch();
+      orderModal.openModal();
     } catch {
       toast.error('Erro ao carregar pedido');
     }
@@ -156,35 +145,37 @@ export function ComprasPage() {
       qtds[i.id] = pendente > 0 ? pendente : 0;
     });
     setReceiveQuantities(qtds);
-    setShowReceiveModal(true);
+    receiveModal.openModal();
   };
 
   const addItem = () => {
-    setFormItems([...formItems, { productId: '', nome: '', quantidade: 1, precoUnitario: 0 }]);
+    setFormOrder(prev => ({ ...prev, items: [...prev.items, { productId: '', nome: '', quantidade: 1, precoUnitario: 0 }] }));
   };
 
   const removeItem = (idx: number) => {
-    setFormItems(formItems.filter((_, i) => i !== idx));
+    setFormOrder(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
   };
 
   const updateItem = (idx: number, field: string, value: any) => {
-    const updated = [...formItems];
-    (updated[idx] as any)[field] = value;
-    if (field === 'productId') {
-      const product = products.find(p => p.id === value);
-      if (product) {
-        updated[idx].nome = product.nome;
-        updated[idx].precoUnitario = Number(product.precoCusto) || 0;
+    setFormOrder(prev => {
+      const updated = [...prev.items];
+      (updated[idx] as any)[field] = value;
+      if (field === 'productId') {
+        const product = products.find(p => p.id === value);
+        if (product) {
+          updated[idx].nome = product.nome;
+          updated[idx].precoUnitario = Number(product.precoCusto) || 0;
+        }
       }
-    }
-    if (field === 'quantidade' || field === 'precoUnitario') {
-      updated[idx][field] = Number(value) || 0;
-    }
-    setFormItems(updated);
+      if (field === 'quantidade' || field === 'precoUnitario') {
+        updated[idx][field] = Number(value) || 0;
+      }
+      return { ...prev, items: updated };
+    });
   };
 
   const calcTotal = () => {
-    return formItems.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0) - formDesconto;
+    return formOrder.items.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0) - formOrder.desconto;
   };
 
   const handlePayInvoice = async () => {
@@ -200,7 +191,7 @@ export function ComprasPage() {
         body: JSON.stringify({ mes: invoiceTarget.mes, walletId: invoiceWalletId }),
       });
       toast.success('Fatura paga com sucesso!');
-      setShowInvoiceModal(false);
+      invoiceModal.closeModal();
       setInvoiceTarget(null);
       setInvoiceWalletId('');
       refetchInvoices();
@@ -211,40 +202,40 @@ export function ComprasPage() {
   };
 
   const handleSave = async () => {
-    if (formItems.length === 0 || formItems.some(i => !i.productId)) {
+    if (formOrder.items.length === 0 || formOrder.items.some(i => !i.productId)) {
       toast.error('Adicione pelo menos 1 produto completo');
       return;
     }
-    if (formFormaPagamento === 'A_VISTA' && !formWalletIdEntrada) {
+    if (formOrder.formaPagamento === 'A_VISTA' && !formOrder.walletIdEntrada) {
       toast.error('Selecione a carteira de pagamento');
       return;
     }
-    if (formFormaPagamento === 'CARTAO_CREDITO' && !formCreditCardId) {
+    if (formOrder.formaPagamento === 'CARTAO_CREDITO' && !formOrder.creditCardId) {
       toast.error('Selecione o cartão de crédito da loja');
       return;
     }
-    if (formFormaPagamento !== 'A_VISTA' && formNumeroParcelas > 1 && !formPrimeiroVencimento) {
+    if (formOrder.formaPagamento !== 'A_VISTA' && formOrder.numeroParcelas > 1 && !formOrder.primeiroVencimento) {
       toast.error('Informe o primeiro vencimento');
       return;
     }
     try {
       setSaving(true);
       const body: Record<string, unknown> = {
-        supplierId: formSupplierId || undefined,
-        customerId: formCustomerId || undefined,
-        valorVenda: formValorVenda ? Number(formValorVenda) : undefined,
-        items: formItems.map(i => ({ productId: i.productId, quantidade: i.quantidade, precoUnitario: i.precoUnitario })),
-        valorDesconto: formDesconto,
-        valorFrete: formFrete ? Number(formFrete) : undefined,
-        observacoes: formObservacoes || undefined,
-        dataPedido: formDataCompra || undefined,
-        dataPrevisao: formDataPrevisao || undefined,
-        formaPagamento: formFormaPagamento,
-        numeroParcelas: formFormaPagamento === 'A_VISTA' ? 1 : formNumeroParcelas,
-        valorEntrada: formFormaPagamento === 'A_VISTA' ? undefined : (formValorEntrada ? Number(formValorEntrada) : undefined),
-        walletIdEntrada: formWalletIdEntrada || undefined,
-        creditCardId: formFormaPagamento === 'CARTAO_CREDITO' ? (formCreditCardId || undefined) : undefined,
-        primeiroVencimento: formFormaPagamento !== 'A_VISTA' && formPrimeiroVencimento ? formPrimeiroVencimento : undefined,
+        supplierId: formOrder.supplierId || undefined,
+        customerId: formOrder.customerId || undefined,
+        valorVenda: formOrder.valorVenda ? Number(formOrder.valorVenda) : undefined,
+        items: formOrder.items.map(i => ({ productId: i.productId, quantidade: i.quantidade, precoUnitario: i.precoUnitario })),
+        valorDesconto: formOrder.desconto,
+        valorFrete: formOrder.frete ? Number(formOrder.frete) : undefined,
+        observacoes: formOrder.observacoes || undefined,
+        dataPedido: formOrder.dataCompra || undefined,
+        dataPrevisao: formOrder.dataPrevisao || undefined,
+        formaPagamento: formOrder.formaPagamento,
+        numeroParcelas: formOrder.formaPagamento === 'A_VISTA' ? 1 : formOrder.numeroParcelas,
+        valorEntrada: formOrder.formaPagamento === 'A_VISTA' ? undefined : (formOrder.valorEntrada ? Number(formOrder.valorEntrada) : undefined),
+        walletIdEntrada: formOrder.walletIdEntrada || undefined,
+        creditCardId: formOrder.formaPagamento === 'CARTAO_CREDITO' ? (formOrder.creditCardId || undefined) : undefined,
+        primeiroVencimento: formOrder.formaPagamento !== 'A_VISTA' && formOrder.primeiroVencimento ? formOrder.primeiroVencimento : undefined,
       };
       if (editingOrder) {
         await fetchApi(`/purchases/${editingOrder.id}`, { method: 'PUT', body: JSON.stringify(body) });
@@ -253,7 +244,7 @@ export function ComprasPage() {
         await fetchApi('/purchases', { method: 'POST', body: JSON.stringify(body) });
         toast.success('Pedido criado!');
       }
-      setShowModal(false);
+      orderModal.closeModal();
       refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
@@ -295,7 +286,7 @@ export function ComprasPage() {
         body: JSON.stringify({ itens }),
       });
       toast.success('Itens recebidos com sucesso!');
-      setShowReceiveModal(false);
+      receiveModal.closeModal();
       setReceiveOrder(null);
       refetch();
     } catch (err: unknown) {
@@ -345,7 +336,7 @@ export function ComprasPage() {
                           onClick={() => {
                             setInvoiceTarget({ cardId: inv.card.id, cardNome: inv.card.nome, mes: mesInv.mes, total: mesInv.total });
                             setInvoiceWalletId('');
-                            setShowInvoiceModal(true);
+                            invoiceModal.openModal();
                           }}
                           className="px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium"
                         >
@@ -438,13 +429,13 @@ export function ComprasPage() {
       )}
 
       {/* Modal de Criação/Edição */}
-      {showModal && (
-        <Modal open onClose={() => setShowModal(false)} closeDisabled={saving} title={editingOrder ? `Editar Pedido #${editingOrder.orderNumber}` : 'Novo Pedido'} size="lg">
+      {orderModal.open && (
+        <Modal open onClose={orderModal.closeModal} closeDisabled={saving} title={editingOrder ? `Editar Pedido #${editingOrder.orderNumber}` : 'Novo Pedido'} size="lg">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
-                <select value={formSupplierId} onChange={e => setFormSupplierId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <select value={formOrder.supplierId} onChange={e => setFormOrder(prev => ({ ...prev, supplierId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option value="">Selecione um fornecedor</option>
                   {suppliers.filter(s => s.status !== 'INATIVO').map((s: { id: string; nome: string; status: string; cnpjCpf?: string }) => (
                     <option key={s.id} value={s.id}>{s.nome}{s.cnpjCpf ? ` (${s.cnpjCpf})` : ''}</option>
@@ -453,7 +444,7 @@ export function ComprasPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cliente (Encomenda)</label>
-                <select value={formCustomerId} onChange={e => setFormCustomerId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <select value={formOrder.customerId} onChange={e => setFormOrder(prev => ({ ...prev, customerId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option value="">Sem cliente</option>
                   {customers.map((c: Customer) => (
                     <option key={c.id} value={c.id}>{c.nomeCompleto}{c.telefoneWhatsapp ? ` (${c.telefoneWhatsapp})` : ''}</option>
@@ -467,8 +458,8 @@ export function ComprasPage() {
                 <label className="text-sm font-medium text-gray-700">Itens</label>
                 <button onClick={addItem} className="text-sm text-brand-600 hover:text-brand-700 font-medium">+ Adicionar Item</button>
               </div>
-              {formItems.length === 0 && <p className="text-sm text-gray-400 py-2">Nenhum item adicionado</p>}
-              {formItems.map((item, idx) => (
+              {formOrder.items.length === 0 && <p className="text-sm text-gray-400 py-2">Nenhum item adicionado</p>}
+              {formOrder.items.map((item, idx) => (
                 <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center mb-2 p-2 bg-gray-50 rounded-lg">
                   <div className="flex-1 w-full sm:w-auto">
                     <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
@@ -499,26 +490,26 @@ export function ComprasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data da Compra <span className="text-gray-400">(retroativa)</span></label>
-                <input type="date" value={formDataCompra} onChange={e => setFormDataCompra(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="date" value={formOrder.dataCompra} onChange={e => setFormOrder(prev => ({ ...prev, dataCompra: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Previsão de Entrega</label>
-                <input type="date" value={formDataPrevisao} onChange={e => setFormDataPrevisao(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="date" value={formOrder.dataPrevisao} onChange={e => setFormOrder(prev => ({ ...prev, dataPrevisao: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (R$)</label>
-                <input type="number" value={formDesconto} onChange={e => setFormDesconto(Number(e.target.value) || 0)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="number" value={formOrder.desconto} onChange={e => setFormOrder(prev => ({ ...prev, desconto: Number(e.target.value) || 0 }))} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Frete (R$) <span className="text-gray-400">(vira custo do estoque)</span></label>
-                <input type="number" value={formFrete} onChange={e => setFormFrete(e.target.value)} min="0" step="0.01" placeholder="0,00" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="number" value={formOrder.frete} onChange={e => setFormOrder(prev => ({ ...prev, frete: e.target.value }))} min="0" step="0.01" placeholder="0,00" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Valor de Venda (R$)</label>
-                <input type="number" value={formValorVenda} onChange={e => setFormValorVenda(e.target.value)} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="number" value={formOrder.valorVenda} onChange={e => setFormOrder(prev => ({ ...prev, valorVenda: e.target.value }))} min="0" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
 
@@ -528,32 +519,32 @@ export function ComprasPage() {
                 <div className="flex gap-2 mb-3 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setFormFormaPagamento('A_VISTA')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formFormaPagamento === 'A_VISTA' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                    onClick={() => setFormOrder(prev => ({ ...prev, formaPagamento: 'A_VISTA' }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formOrder.formaPagamento === 'A_VISTA' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
                   >
                     À Vista
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormFormaPagamento('PARCELADO_FORNECEDOR')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formFormaPagamento === 'PARCELADO_FORNECEDOR' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                    onClick={() => setFormOrder(prev => ({ ...prev, formaPagamento: 'PARCELADO_FORNECEDOR' }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formOrder.formaPagamento === 'PARCELADO_FORNECEDOR' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
                   >
                     Parcelado com Fornecedor
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormFormaPagamento('CARTAO_CREDITO')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formFormaPagamento === 'CARTAO_CREDITO' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                    onClick={() => setFormOrder(prev => ({ ...prev, formaPagamento: 'CARTAO_CREDITO' }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formOrder.formaPagamento === 'CARTAO_CREDITO' ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
                   >
                     Cartão de Crédito da Loja
                   </button>
                 </div>
 
-                {formFormaPagamento === 'A_VISTA' && (
+                {formOrder.formaPagamento === 'A_VISTA' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Carteira de Pagamento</label>
-                      <select value={formWalletIdEntrada} onChange={e => setFormWalletIdEntrada(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <select value={formOrder.walletIdEntrada} onChange={e => setFormOrder(prev => ({ ...prev, walletIdEntrada: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">Selecione</option>
                         {wallets.map((w: any) => (
                           <option key={w.id} value={w.id}>{w.nome}</option>
@@ -566,23 +557,23 @@ export function ComprasPage() {
                   </div>
                 )}
 
-                {formFormaPagamento === 'PARCELADO_FORNECEDOR' && (
+                {formOrder.formaPagamento === 'PARCELADO_FORNECEDOR' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
-                      <input type="number" value={formNumeroParcelas} onChange={e => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <input type="number" value={formOrder.numeroParcelas} onChange={e => setFormOrder(prev => ({ ...prev, numeroParcelas: Math.max(1, Number(e.target.value) || 1) }))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">1º Vencimento</label>
-                      <input type="date" value={formPrimeiroVencimento} onChange={e => setFormPrimeiroVencimento(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <input type="date" value={formOrder.primeiroVencimento} onChange={e => setFormOrder(prev => ({ ...prev, primeiroVencimento: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Entrada (opcional)</label>
-                      <input type="number" value={formValorEntrada} onChange={e => setFormValorEntrada(e.target.value)} min="0" step="0.01" placeholder="0,00" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <input type="number" value={formOrder.valorEntrada} onChange={e => setFormOrder(prev => ({ ...prev, valorEntrada: e.target.value }))} min="0" step="0.01" placeholder="0,00" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Carteira da Entrada</label>
-                      <select value={formWalletIdEntrada} onChange={e => setFormWalletIdEntrada(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <select value={formOrder.walletIdEntrada} onChange={e => setFormOrder(prev => ({ ...prev, walletIdEntrada: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">Selecione</option>
                         {wallets.map((w: any) => (
                           <option key={w.id} value={w.id}>{w.nome}</option>
@@ -593,19 +584,19 @@ export function ComprasPage() {
                   </div>
                 )}
 
-                {formFormaPagamento === 'CARTAO_CREDITO' && (
+                {formOrder.formaPagamento === 'CARTAO_CREDITO' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
-                      <input type="number" value={formNumeroParcelas} onChange={e => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <input type="number" value={formOrder.numeroParcelas} onChange={e => setFormOrder(prev => ({ ...prev, numeroParcelas: Math.max(1, Number(e.target.value) || 1) }))} min="1" max="120" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">1º Vencimento (opcional)</label>
-                      <input type="date" value={formPrimeiroVencimento} onChange={e => setFormPrimeiroVencimento(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <input type="date" value={formOrder.primeiroVencimento} onChange={e => setFormOrder(prev => ({ ...prev, primeiroVencimento: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div className="col-span-1 sm:col-span-2">
                       <label className="block text-xs font-medium text-gray-600 mb-1">Cartão de Crédito</label>
-                      <select value={formCreditCardId} onChange={e => setFormCreditCardId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <select value={formOrder.creditCardId} onChange={e => setFormOrder(prev => ({ ...prev, creditCardId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">Selecione o cartão (as parcelas vencem na fatura)</option>
                         {creditCards.length === 0 && (
                           <option value="" disabled>Nenhum cartão cadastrado — cadastre em Configurações</option>
@@ -623,7 +614,7 @@ export function ComprasPage() {
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-              <textarea value={formObservacoes} onChange={e => setFormObservacoes(e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <textarea value={formOrder.observacoes} onChange={e => setFormOrder(prev => ({ ...prev, observacoes: e.target.value }))} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
             <div className="text-right text-lg font-bold text-gray-900 mb-4">
@@ -631,7 +622,7 @@ export function ComprasPage() {
             </div>
 
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
+              <button onClick={orderModal.closeModal} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Salvando...' : editingOrder ? 'Atualizar' : 'Criar Pedido'}
               </button>
@@ -640,8 +631,8 @@ export function ComprasPage() {
       )}
 
       {/* Modal de Pagamento de Fatura */}
-      {showInvoiceModal && invoiceTarget && (
-        <Modal open onClose={() => setShowInvoiceModal(false)} closeDisabled={saving} title={`Pagar Fatura ${invoiceTarget.cardNome}`} size="sm">
+      {invoiceModal.open && invoiceTarget && (
+        <Modal open onClose={invoiceModal.closeModal} closeDisabled={saving} title={`Pagar Fatura ${invoiceTarget.cardNome}`} size="sm">
             <p className="text-sm text-gray-500 mb-4">{format(new Date(invoiceTarget.mes + '-01T12:00:00'), 'MM/yyyy')} · {formatBRL(invoiceTarget.total)}</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Carteira de Pagamento</label>
@@ -653,7 +644,7 @@ export function ComprasPage() {
               </select>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowInvoiceModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
+              <button onClick={invoiceModal.closeModal} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
               <button onClick={handlePayInvoice} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Pagando...' : 'Confirmar Pagamento'}
               </button>
@@ -662,8 +653,8 @@ export function ComprasPage() {
       )}
 
       {/* Modal de Recebimento */}
-      {showReceiveModal && receiveOrder && (
-        <Modal open onClose={() => setShowReceiveModal(false)} closeDisabled={saving} title={`Receber Pedido #${receiveOrder.orderNumber}`} size="md">
+      {receiveModal.open && receiveOrder && (
+        <Modal open onClose={receiveModal.closeModal} closeDisabled={saving} title={`Receber Pedido #${receiveOrder.orderNumber}`} size="md">
             {receiveOrder.supplier?.nome && <p className="text-sm text-gray-500 mb-4">{receiveOrder.supplier.nome}</p>}
 
             <div className="space-y-3 mb-4">
@@ -704,7 +695,7 @@ export function ComprasPage() {
             )}
 
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowReceiveModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Fechar</button>
+              <button onClick={receiveModal.closeModal} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Fechar</button>
               <button onClick={handleReceive} disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {saving ? 'Processando...' : 'Confirmar Recebimento'}
               </button>
