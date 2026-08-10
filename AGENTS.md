@@ -25,4 +25,5 @@ React 19 + TypeScript + Tailwind 3.4 + Vite 8 + React Router 8 (`react-router`, 
 6. **`fetchApi` inline em one-offs** — `Layout.tsx` (revert-impersonate) e `ContextSwitcher.tsx` (criar loja) ainda chamam `fetchApi` direto no JSX; extrair hooks se crescerem.
 
 ## Histórico recente (ago/2026)
-- Commit base `ac0ea30` → 13 commits de refactor+WIP (hooks de dados, domainMaps, modais financeiros, StatusActions, 2FA, Turnstile, verificação de email, role-gates, migração react-query/router 8). Worktree estava limpo após a revisão.
+- Commit base `ac0ea30` → 13 commits de refactor+WIP (hooks de dados, domainMaps, modais financeiros, StatusActions, 2FA, Turnstile, verificação de email, role-gates, migração react-query/router 8).
+- Refactor de estado (uncommitted): role-gates via AuthContext (`isPf`/`isRestrictedRole`/`canAccess`), `ACTIVE_STORE_KEY` centralizado, server data migrado para react-query em `PersonalDashboardPage`/`PDVPage`/`ComprasPage` (chaves por `storeId`, PDV com fallback offline), modais financeiros (`LancamentoModal`/`BaixaModal`/`BaixaPagarModal`) buscam seus próprios dados (`['finance-dashboard', storeId]`, `['finance-categories', storeId]`, `['customers', storeId]`), `ComprasPage` com estado `formOrder` agrupado + `useModal`.

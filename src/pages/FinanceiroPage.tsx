@@ -39,9 +39,9 @@ export const FinanceiroPage: React.FC = () => {
   const {
     loading, wallets, saldoTotal, devedoresAtrasados, totalAtrasado, despesasMes,
     comissaoPagasMes, pjData, transactions, receivables, payables, dreData,
-    customers, categories, dashboardCards,
+    dashboardCards,
   } = dashboard;
-  const { setCategories, carregarDados } = dashboard;
+  const { carregarDados } = dashboard;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Modais (useReducer)
@@ -102,11 +102,10 @@ export const FinanceiroPage: React.FC = () => {
   const handleCriarCategoria = async (tipo: 'ENTRADA' | 'SAIDA') => {
     if (!modais.novaCategoriaNome.trim()) return;
     try {
-      const nova = await fetchApi('/finance/categories', {
+      await fetchApi('/finance/categories', {
         method: 'POST',
         body: JSON.stringify({ nome: modais.novaCategoriaNome.trim(), tipo }),
       });
-      setCategories(prev => [...prev, nova]);
       if (modais.tipoLancamento === 'CONTA_PAGAR') {
         setFormPayable({ ...formPayable, categoria: modais.novaCategoriaNome.trim() });
       } else {
@@ -1109,13 +1108,6 @@ export const FinanceiroPage: React.FC = () => {
         setFormTx={setFormTx}
         formPayable={formPayable}
         setFormPayable={setFormPayable}
-        wallets={wallets}
-        customers={customers}
-        categories={categories}
-        novaCategoriaMode={modais.novaCategoriaMode}
-        setNovaCategoriaMode={modais.setNovaCategoriaMode}
-        novaCategoriaNome={modais.novaCategoriaNome}
-        setNovaCategoriaNome={modais.setNovaCategoriaNome}
         onSubmitTx={handleSalvarLancamento}
         onSubmitPayable={handleSalvarPayable}
         onCriarCategoria={handleCriarCategoria}
@@ -1129,7 +1121,6 @@ export const FinanceiroPage: React.FC = () => {
         setValorPago={valor => setFormBaixa(prev => ({ ...prev, valorPago: valor }))}
         walletId={formBaixa.walletId}
         setWalletId={walletId => setFormBaixa(prev => ({ ...prev, walletId }))}
-        wallets={wallets}
         onSubmit={handleBaixa}
       />
 
@@ -1139,7 +1130,6 @@ export const FinanceiroPage: React.FC = () => {
         payable={modais.baixaPagar.payable ?? null}
         walletId={formBaixaPagar.walletId}
         setWalletId={walletId => setFormBaixaPagar(prev => ({ ...prev, walletId }))}
-        wallets={wallets}
         onSubmit={handleBaixaPagar}
       />
 

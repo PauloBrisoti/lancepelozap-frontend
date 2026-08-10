@@ -1,6 +1,8 @@
 import type { FormEvent } from 'react';
 import { Modal } from './Modal';
 import { formatBRL } from '../utils/format';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useAuth } from '../context/AuthContext';
 import type { Wallet, Payable } from '../hooks/useFinanceiroDashboard';
 
 interface Props {
@@ -9,7 +11,6 @@ interface Props {
   payable: Payable | null;
   walletId: string;
   setWalletId: (walletId: string) => void;
-  wallets: Wallet[];
   onSubmit: (e: FormEvent) => void;
 }
 
@@ -20,9 +21,16 @@ export function BaixaPagarModal({
   payable,
   walletId,
   setWalletId,
-  wallets,
   onSubmit,
 }: Props) {
+  const { activeStoreId } = useAuth();
+  const walletsQ = useApiQuery<{ wallets: Wallet[] }>(
+    ['finance-dashboard', activeStoreId],
+    '/finance/dashboard',
+    { staleTime: STALE_TIMES.FREQUENT, enabled: open }
+  );
+  const wallets = walletsQ.data?.wallets ?? [];
+
   if (!open || !payable) return null;
 
   return (

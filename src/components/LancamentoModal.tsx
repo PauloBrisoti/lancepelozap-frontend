@@ -1,7 +1,10 @@
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from './Modal';
 import { formatDateBR } from '../lib/dates';
 import { formatBRL } from '../utils/format';
+import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useAuth } from '../context/AuthContext';
 import type { Wallet, Customer, FinancialCategory } from '../hooks/useFinanceiroDashboard';
 
 export interface LancamentoForm {
@@ -45,16 +48,9 @@ interface Props {
   setFormTx: (form: LancamentoForm) => void;
   formPayable: PayableForm;
   setFormPayable: (form: PayableForm) => void;
-  wallets: Wallet[];
-  customers: Customer[];
-  categories: FinancialCategory[];
-  novaCategoriaMode: 'tx' | null;
-  setNovaCategoriaMode: (mode: 'tx' | null) => void;
-  novaCategoriaNome: string;
-  setNovaCategoriaNome: (nome: string) => void;
   onSubmitTx: (e: FormEvent) => void;
   onSubmitPayable: (e: FormEvent) => void;
-  onCriarCategoria: (tipo: 'ENTRADA' | 'SAIDA') => void;
+  onCriarCategoria: (tipo: 'ENTRADA' | 'SAIDA') => Promise<void>;
 }
 
 /** Modal unificado de lançamento: Receita / Despesa à Vista / Conta a Pagar */
@@ -67,17 +63,40 @@ export function LancamentoModal({
   setFormTx,
   formPayable,
   setFormPayable,
-  wallets,
-  customers,
-  categories,
-  novaCategoriaMode,
-  setNovaCategoriaMode,
-  novaCategoriaNome,
-  setNovaCategoriaNome,
   onSubmitTx,
   onSubmitPayable,
   onCriarCategoria,
 }: Props) {
+  const queryClient = useQueryClient();
+  const { activeStoreId } = useAuth();
+  const [novaCategoriaMode, setNovaCategoriaMode] = useState<'tx' | null>(null);
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
+
+  // Dados próprios do modal (carteiras, clientes, categorias) via cache React Query
+  const walletsQ = useApiQuery<{ wallets: Wallet[] }>(
+    ['finance-dashboard', activeStoreId],
+    '/finance/dashboard',
+    { staleTime: STALE_TIMES.FREQUENT, enabled: open }
+  );
+  const customersQ = useApiQuery<Customer[]>(
+    ['customers', activeStoreId],
+    '/customers',
+    { staleTime: STALE_TIMES.NORMAL, enabled: open }
+  );
+  const categoriesQ = useApiQuery<FinancialCategory[]>(
+    ['finance-categories', activeStoreId],
+    '/finance/categories',
+    { staleTime: STALE_TIMES.STATIC, enabled: open }
+  );
+  const wallets = walletsQ.data?.wallets ?? [];
+  const customers = customersQ.data ?? [];
+  const categories = categoriesQ.data ?? [];
+
+  const handleCriarCategoria = async (tipo: 'ENTRADA' | 'SAIDA') => {
+    await onCriarCategoria(tipo);
+    queryClient.invalidateQueries({ queryKey: ['finance-categories', activeStoreId] });
+  };
+
   return (
     <Modal open={open} onClose={onClose} size="sm" maxHeight="85vh">
       <div className="flex justify-between items-center mb-4">
@@ -121,8 +140,8 @@ export function LancamentoModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
                 {novaCategoriaMode === 'tx' ? (
                   <div className="flex gap-1">
-                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA'); } }} />
-                    <button type="button" onClick={() => onCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
+                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA'); } }} />
+                    <button type="button" onClick={() => handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
                     <button type="button" onClick={() => { setNovaCategoriaMode(null); setNovaCategoriaNome(''); }} className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">✕</button>
                   </div>
                 ) : (
@@ -229,8 +248,8 @@ export function LancamentoModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
                 {novaCategoriaMode === 'tx' ? (
                   <div className="flex gap-1">
-                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onCriarCategoria('SAIDA'); } }} />
-                    <button type="button" onClick={() => onCriarCategoria('SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
+                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCriarCategoria('SAIDA'); } }} />
+                    <button type="button" onClick={() => handleCriarCategoria('SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
                     <button type="button" onClick={() => { setNovaCategoriaMode(null); setNovaCategoriaNome(''); }} className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">✕</button>
                   </div>
                 ) : (
