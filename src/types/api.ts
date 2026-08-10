@@ -39,9 +39,10 @@ export interface Receivable {
   valorJaPago?: number;
   saldoRestante?: number;
   formaPagamentoEsperada?: string;
+  dataPagamentoEfetivo?: string;
   payments?: { valor: number }[];
   customer?: Customer;
-  sale?: { id: string } | null;
+  sale?: { id: string; dataVenda?: string; valorTotalLiquido?: number; formaPagamento?: string } | null;
 }
 
 export interface Sale {
@@ -63,6 +64,7 @@ export interface Sale {
   observacoes?: string;
   customerId?: string;
   customer?: Customer | null;
+  userId?: string;
   user?: { nome: string } | null;
   saleItems?: SaleItem[];
   receivables?: Receivable[];
@@ -117,6 +119,63 @@ export interface Category {
   corHexadecimal: string | null;
   margemLucroPadrao: number | null;
   aliquotaImposto: number | null;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  createdAt: string;
+  read: boolean;
+  readBy?: string[];
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success';
+  active: boolean;
+}
+
+export interface CashTransaction {
+  id: string;
+  tipo: string;
+  valor: number;
+  descricao: string | null;
+  createdAt: string;
+}
+
+export interface ScanPlanItem {
+  clientId: string;
+  cliente: string;
+  email: string;
+  subscriptionId: string;
+  valor: number;
+  diasAtraso: number;
+  dataVencimento: string;
+  acoes: string[];
+  bloqueioAutomaticoAtivo: boolean;
+}
+
+export interface ScanPlan {
+  data: string;
+  itens: ScanPlanItem[];
+  resumo: {
+    marcarVencido: number;
+    lembretes1: number;
+    lembretes2: number;
+    avisosBloqueio: number;
+    total: number;
+  };
+}
+
+export interface ScanResultado {
+  marcadasVencido: number;
+  notificacoesEnviadas: number;
+  notificacoesFalhas: number;
+  detalhes: unknown[];
 }
 
 export interface AuditLogEntry {
@@ -238,6 +297,7 @@ export interface Subscription {
   status: string;
   dataVencimento: string;
   statusPagamento: string;
+  valorMensalidade?: string | number;
 }
 
 export interface SuperAdminDashboard {
@@ -247,11 +307,13 @@ export interface SuperAdminDashboard {
   totalUsuarios: number;
   mrr: number;
   arpu: number;
-  ltv: number;
+  ltv: number | null;
   churnRate: number;
   inadimplentes: number;
   novosClientesMes: number;
   momGrowth: number;
   receitaPendente: number;
+  mrrDelta: number;
+  churnLojasMes: number;
   receitaChart: { mes: string; receita: number }[];
 }
