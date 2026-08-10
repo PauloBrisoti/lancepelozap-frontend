@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';

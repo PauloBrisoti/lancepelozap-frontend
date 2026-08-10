@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { IconHomeSm, IconShoppingBagSm, IconVendasSm, IconFinanceSm, IconClientsSm, IconMenuSm } from './icons';
 

@@ -1,32 +1,18 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { fetchApi } from '../lib/api';
-
-interface SubscriptionData {
-  id: string;
-  statusPagamento: string;
-  dataVencimento: string;
-  valorMensalidade: number;
-}
+import { useNavigate } from 'react-router';
+import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
+import { trialDaysLeft } from '../utils/subscription';
 
 export function TrialBanner() {
   const navigate = useNavigate();
-  const [sub, setSub] = useState<SubscriptionData | null>(null);
-
-  useEffect(() => {
-    fetchApi<SubscriptionData>('/subscriptions/me')
-      .then(d => setSub(d))
-      .catch(() => {});
-  }, []);
+  const { user } = useAuth();
+  // Banner de trial é exclusivo de lojistas; SUPER_ADMIN/equipe interna não
+  // têm assinatura (o backend responderia 401, que derrubaria a sessão).
+  const { data: sub } = useSubscription(!!user && user.role !== 'SUPER_ADMIN');
 
   if (!sub || sub.statusPagamento !== 'TRIAL') return null;
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const venc = new Date(sub.dataVencimento);
-  venc.setHours(0, 0, 0, 0);
-  const diffMs = venc.getTime() - hoje.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const diffDays = trialDaysLeft(sub.dataVencimento);
 
   if (diffDays > 30) return null;
 
