@@ -33,11 +33,8 @@ interface Payment {
 }
 
 export function ComissoesPage() {
-  const { user, activeWorkspace } = useAuth();
+  const { isRestrictedRole } = useAuth();
   // VENDEDOR/CAIXA vê apenas as próprias comissões (sem pagar, sem ver outros vendedores)
-  const isRestricted = !user?.isImpersonating && activeWorkspace
-    ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role)
-    : false;
 
   const [paying, setPaying] = useState<string | null>(null);
   const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
@@ -101,7 +98,7 @@ export function ComissoesPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        {isRestricted ? 'Minhas Comissões' : 'Comissões'}
+        {isRestrictedRole ? 'Minhas Comissões' : 'Comissões'}
       </h1>
 
       {isLoading ? (
@@ -121,7 +118,7 @@ export function ComissoesPage() {
           </div>
 
           {/* Per Seller (apenas gestores) */}
-          {!isRestricted && (
+          {!isRestrictedRole && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Comissões por Vendedor</h2>

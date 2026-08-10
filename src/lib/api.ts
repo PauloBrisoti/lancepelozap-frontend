@@ -1,5 +1,10 @@
 export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+/** Chave legada de persistência do workspace ativo (localStorage) */
+export const ACTIVE_STORE_KEY = '@LancePeloZap:activeStoreId';
+/** Cookie do workspace ativo (fonte preferida) */
+export const ACTIVE_STORE_COOKIE = 'activeStoreId';
+
 /**
  * Erro padronizado para falhas de API.
  * Inclui status HTTP e mensagem legível.
@@ -58,7 +63,7 @@ export async function fetchApi<T = any>(
     const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
     return match ? decodeURIComponent(match[2]) : null;
   };
-  const activeStoreId = getCookie('activeStoreId') || localStorage.getItem('@LancePeloZap:activeStoreId');
+  const activeStoreId = getCookie(ACTIVE_STORE_COOKIE) || localStorage.getItem(ACTIVE_STORE_KEY);
   const headers: Record<string, string> = {
     ...(fetchOptions.headers as Record<string, string>),
   };

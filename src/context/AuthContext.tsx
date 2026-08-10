@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
-import { fetchApi } from '../lib/api';
+import { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
+import { fetchApi, ACTIVE_STORE_COOKIE, ACTIVE_STORE_KEY } from '../lib/api';
 
 interface Store {
   id: string;
@@ -36,12 +36,20 @@ interface User {
   emailVerificationRequired?: boolean;
 }
 
+const RESTRICTED_ROLES = ['VENDEDOR', 'CAIXA'];
+
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   loading: boolean;
   activeStoreId: string | null;
   activeWorkspace: Workspace | null;
+  /** Workspace atual é do tipo pessoa física (finanças pessoais) */
+  isPf: boolean;
+  /** Usuário em papel restrito (VENDEDOR/CAIXA), sem impersonação ativa */
+  isRestrictedRole: boolean;
+  /** Semântica de feature flag: sem features cadastradas => tudo liberado */
+  canAccess: (feature?: string) => boolean;
   login: (user: User) => void;
   logout: () => Promise<void>;
   switchStore: (storeId: string) => void;
@@ -67,9 +75,9 @@ function getCookie(name: string): string | null {
  */
 function setStoreIdCookie(storeId: string | null) {
   if (storeId) {
-    document.cookie = `activeStoreId=${encodeURIComponent(storeId)}; path=/; max-age=604800; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
+    document.cookie = `${ACTIVE_STORE_COOKIE}=${encodeURIComponent(storeId)}; path=/; max-age=604800; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
   } else {
-    document.cookie = 'activeStoreId=; path=/; max-age=0';
+    document.cookie = `${ACTIVE_STORE_COOKIE}=; path=/; max-age=0`;
   }
 }
 
@@ -77,18 +85,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(
-    getCookie('activeStoreId') || localStorage.getItem('@LancePeloZap:activeStoreId')
+    getCookie(ACTIVE_STORE_COOKIE) || localStorage.getItem(ACTIVE_STORE_KEY)
   );
-  
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
 
-  // Sync activeWorkspace when user or activeStoreId changes
-  useEffect(() => {
-    if (user?.workspaces && activeStoreId) {
-      const ws = user.workspaces.find(w => w.id === activeStoreId);
-      if (ws) setActiveWorkspace(ws);
-    }
+  // Estado derivado: o workspace ativo é sempre o workspace do usuário cujo id
+  // é o activeStoreId. Derivar (em vez de sincronizar via efeito) elimina o
+  // risco de activeWorkspace ficar inconsistente com o user.
+  const activeWorkspace = useMemo<Workspace | null>(() => {
+    if (!user?.workspaces || !activeStoreId) return null;
+    return user.workspaces.find(w => w.id === activeStoreId) ?? null;
   }, [user, activeStoreId]);
+
+  const isPf = activeWorkspace?.tipo === 'PF';
+  const isRestrictedRole = !!user && !user.isImpersonating && activeWorkspace
+    ? RESTRICTED_ROLES.includes(activeWorkspace.role)
+    : false;
+
+  const canAccess = useCallback((feature?: string) => {
+    const f = user?.features;
+    if (!f || !feature) return true;
+    if (Object.keys(f).length === 0) return true;
+    return !!f[feature];
+  }, [user]);
 
   // Verifica se há uma sessão ativa via cookie na inicialização
   useEffect(() => {
@@ -97,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await fetchApi('/auth/me');
         if (data.user) {
           setUser(data.user);
-          const storedActive = getCookie('activeStoreId') || localStorage.getItem('@LancePeloZap:activeStoreId');
+          const storedActive = getCookie(ACTIVE_STORE_COOKIE) || localStorage.getItem(ACTIVE_STORE_KEY);
           let targetStoreId = storedActive;
           if (!targetStoreId && data.user.workspaces && data.user.workspaces.length > 0) {
             targetStoreId = data.user.workspaces[0].id;
@@ -105,8 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (targetStoreId) {
             setActiveStoreId(targetStoreId);
             setStoreIdCookie(targetStoreId);
-            const ws = data.user.workspaces?.find((w: Workspace) => w.id === targetStoreId);
-            if (ws) setActiveWorkspace(ws);
           }
         }
       } catch {
@@ -115,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
-    
+
     checkAuth();
   }, []);
 
@@ -133,9 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hadSessionRef.current = false;
       setUser(null);
       setActiveStoreId(null);
-      setActiveWorkspace(null);
       setStoreIdCookie(null);
-      localStorage.removeItem('@LancePeloZap:activeStoreId');
+      localStorage.removeItem(ACTIVE_STORE_KEY);
     };
     window.addEventListener('session_expired', onSessionExpired);
     return () => window.removeEventListener('session_expired', onSessionExpired);
@@ -173,14 +188,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userData.workspaces && userData.workspaces.length > 0) {
       const firstWorkspace = userData.workspaces[0];
       setActiveStoreId(firstWorkspace.id);
-      setActiveWorkspace(firstWorkspace);
       setStoreIdCookie(firstWorkspace.id);
-      localStorage.removeItem('@LancePeloZap:activeStoreId');
+      localStorage.removeItem(ACTIVE_STORE_KEY);
     } else {
       setActiveStoreId(null);
-      setActiveWorkspace(null);
       setStoreIdCookie(null);
-      localStorage.removeItem('@LancePeloZap:activeStoreId');
+      localStorage.removeItem(ACTIVE_STORE_KEY);
     }
   };
 
@@ -192,22 +205,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setActiveStoreId(null);
-      setActiveWorkspace(null);
       setStoreIdCookie(null);
-      localStorage.removeItem('@LancePeloZap:activeStoreId');
+      localStorage.removeItem(ACTIVE_STORE_KEY);
     }
   };
 
   const switchStore = (storeId: string) => {
     switchWorkspace(storeId);
   };
-  
+
   const switchWorkspace = (workspaceId: string) => {
     setActiveStoreId(workspaceId);
-    const ws = user?.workspaces?.find(w => w.id === workspaceId);
-    if (ws) setActiveWorkspace(ws);
     setStoreIdCookie(workspaceId);
-    localStorage.removeItem('@LancePeloZap:activeStoreId');
+    localStorage.removeItem(ACTIVE_STORE_KEY);
     refreshUser();
   };
 
@@ -215,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchApi(`/super-admin/impersonate/${storeId}`, { method: 'POST' });
     setActiveStoreId(storeId);
     setStoreIdCookie(storeId);
-    localStorage.removeItem('@LancePeloZap:activeStoreId');
+    localStorage.removeItem(ACTIVE_STORE_KEY);
     window.location.href = '/app';
   };
 
@@ -233,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, activeStoreId, activeWorkspace, login, logout, switchStore, switchWorkspace, impersonate, refreshUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, loading, activeStoreId, activeWorkspace, isPf, isRestrictedRole, canAccess, login, logout, switchStore, switchWorkspace, impersonate, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

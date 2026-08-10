@@ -52,8 +52,7 @@ interface Product {
 }
 
 export function EstoquePage() {
-  const { user, activeWorkspace } = useAuth();
-  const isRestricted = !user?.isImpersonating && activeWorkspace ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role) : false;
+  const { isRestrictedRole } = useAuth();
   const { count: alertCount, products: alertProducts } = useStockAlerts();
   const [produtos, setProdutos] = useState<Product[]>([]);
   const [termoBusca, setTermoBusca] = useState('');
@@ -590,9 +589,9 @@ export function EstoquePage() {
                   <th className="px-6 py-4 font-medium">Marca</th>
                   <th className="px-6 py-4 font-medium">Categoria</th>
                   <th className="px-6 py-4 font-medium text-center">Qtd</th>
-                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Preço Custo</th>}
+                  {!isRestrictedRole && <th className="px-6 py-4 font-medium text-right">Preço Custo</th>}
                   <th className="px-6 py-4 font-medium text-right">Preço Venda</th>
-                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Margem Lucro</th>}
+                  {!isRestrictedRole && <th className="px-6 py-4 font-medium text-right">Margem Lucro</th>}
                   <th className="px-6 py-4 font-medium text-right">Ações</th>
                 </tr>
               </thead>
@@ -659,9 +658,9 @@ export function EstoquePage() {
                           )}
                         </span>
                       </td>
-                      {!isRestricted && <td className="px-6 py-4 text-right text-gray-500">R$ {Number(prod.precoCusto).toFixed(2)}</td>}
+                      {!isRestrictedRole && <td className="px-6 py-4 text-right text-gray-500">R$ {Number(prod.precoCusto).toFixed(2)}</td>}
                       <td className="px-6 py-4 text-right font-medium text-gray-900">R$ {Number(prod.precoVendaSugerido).toFixed(2)}</td>
-                      {!isRestricted && (
+                      {!isRestrictedRole && (
                         <td className="px-6 py-4 text-right font-medium text-green-600">
                           {prod.precoCusto > 0 
                             ? `${(((Number(prod.precoVendaSugerido) - Number(prod.precoCusto)) / Number(prod.precoCusto)) * 100).toFixed(1)}% `
@@ -684,7 +683,7 @@ export function EstoquePage() {
                 <tr>
                   <th className="px-6 py-4 font-medium">Produto</th>
                   <th className="px-6 py-4 font-medium text-center">Quantidade Atual</th>
-                  {!isRestricted && <th className="px-6 py-4 font-medium text-right">Valor Investido</th>}
+                  {!isRestrictedRole && <th className="px-6 py-4 font-medium text-right">Valor Investido</th>}
                   <th className="px-6 py-4 font-medium text-right text-green-700">Valor Potencial</th>
                   <th className="px-6 py-4 font-medium text-right">Ação</th>
                 </tr>
@@ -709,7 +708,7 @@ export function EstoquePage() {
                             )}
                           </span>
                         </td>
-                        {!isRestricted && <td className="px-6 py-4 text-right text-gray-500">R$ {inv.toFixed(2)}</td>}
+                        {!isRestrictedRole && <td className="px-6 py-4 text-right text-gray-500">R$ {inv.toFixed(2)}</td>}
                         <td className="px-6 py-4 text-right font-medium text-green-700">R$ {pot.toFixed(2)}</td>
                         <td className="px-6 py-4 text-right">
                           <button onClick={() => abrirModalProduto(prod)} className="text-brand-600 hover:text-brand-900 font-medium text-xs border border-brand-200 bg-brand-50 px-2 py-1 rounded">Dar Entrada</button>
@@ -721,7 +720,7 @@ export function EstoquePage() {
                 {produtosFiltrados.length > 0 && (
                   <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
                     <td className="px-6 py-4 text-gray-900" colSpan={2}>Totais em Estoque:</td>
-                    {!isRestricted && <td className="px-6 py-4 text-right text-gray-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoCusto), 0).toFixed(2)}</td>}
+                    {!isRestrictedRole && <td className="px-6 py-4 text-right text-gray-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoCusto), 0).toFixed(2)}</td>}
                     <td className="px-6 py-4 text-right text-green-700">R$ {produtosFiltrados.reduce((a, b) => a + (b.qtdEstoqueAtual * b.precoVendaSugerido), 0).toFixed(2)}</td>
                     <td></td>
                   </tr>

@@ -12,19 +12,11 @@ import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPack
 
 export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
-  const { user, activeWorkspace } = useAuth();
+  const { user, activeWorkspace, isPf, isRestrictedRole, canAccess } = useAuth();
   const { count: alertCount } = useStockAlerts();
 
-  const isPf = activeWorkspace?.tipo === 'PF';
-  const isRestricted = !user?.isImpersonating && activeWorkspace ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role) : false;
-  const can = (key?: string) => {
-    const f = user?.features;
-    if (!f || !key) return true;
-    if (Object.keys(f).length === 0) return true;
-    return !!f[key];
-  };
-  const showOperacional = ['caixa', 'ordem_servico', 'agenda', 'orcamentos', 'operacional_pet', 'devolucoes'].some(can);
-  const showEstoque = ['catalogo', 'transferencia_estoque', 'inventario', 'compras', 'fornecedores'].some(can);
+  const showOperacional = ['caixa', 'ordem_servico', 'agenda', 'orcamentos', 'operacional_pet', 'devolucoes'].some(canAccess);
+  const showEstoque = ['catalogo', 'transferencia_estoque', 'inventario', 'compras', 'fornecedores'].some(canAccess);
   const isActivePath = (path: string) => {
     const { pathname } = location;
     if (path === '/app' || path === '/admin') return pathname === path;
@@ -81,7 +73,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
       <AnnouncementsBanner />
 
       <nav className="flex-1 p-4 space-y-1">
-        <Link to={user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestricted ? '/app/vendas' : '/app'} className={getLinkClass(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestricted ? '/app/vendas' : '/app')}><IconHome /> {user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? 'Visão Geral SaaS' : activeWorkspace?.tipo === 'PF' ? 'Dashboard PF' : isRestricted ? 'Vendas' : 'Início'}</Link>
+        <Link to={user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestrictedRole ? '/app/vendas' : '/app'} className={getLinkClass(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? '/admin' : isRestrictedRole ? '/app/vendas' : '/app')}><IconHome /> {user?.role === 'SUPER_ADMIN' && !user?.isImpersonating ? 'Visão Geral SaaS' : activeWorkspace?.tipo === 'PF' ? 'Dashboard PF' : isRestrictedRole ? 'Vendas' : 'Início'}</Link>
 
         {!(user?.role === 'SUPER_ADMIN' && !user?.isImpersonating) && (
           <>
@@ -104,22 +96,22 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Crediário / Fiado
                 </Link>}
-                {!isRestricted && (!user?.features || user.features?.financeiro) && <Link to="/app/financeiro" className={getLinkClass('/app/financeiro')}><IconFinance /> Financeiro</Link>}
+                {!isRestrictedRole && (!user?.features || user.features?.financeiro) && <Link to="/app/financeiro" className={getLinkClass('/app/financeiro')}><IconFinance /> Financeiro</Link>}
               </>
             )}
 
             <div className="border-t border-gray-200 pt-2 mt-2">
               {activeWorkspace?.tipo !== 'PF' && (
                 <AccordionSection title="Gestão & Relatórios" icon="📊" defaultOpen={activeSection === 'Gestão & Relatórios'}>
-                  {!isRestricted && (!user?.features || user.features?.dashboard_pj) && <Link to="/app/dashboard-pj" className={getLinkClass('/app/dashboard-pj')}>
+                  {!isRestrictedRole && (!user?.features || user.features?.dashboard_pj) && <Link to="/app/dashboard-pj" className={getLinkClass('/app/dashboard-pj')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     Dashboard Consolidado
                   </Link>}
-                  {!isRestricted && (!user?.features || user.features?.relatorios) && <Link to="/app/relatorios" className={getLinkClass('/app/relatorios')}>
+                  {!isRestrictedRole && (!user?.features || user.features?.relatorios) && <Link to="/app/relatorios" className={getLinkClass('/app/relatorios')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     Relatórios
                   </Link>}
-                  {!isRestricted && (!user?.features || user.features?.insights) && <Link to="/app/insights" className={getLinkClass('/app/insights')}>
+                  {!isRestrictedRole && (!user?.features || user.features?.insights) && <Link to="/app/insights" className={getLinkClass('/app/insights')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     Insights & IA
                   </Link>}
@@ -202,7 +194,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                 </Link>
               </AccordionSection>
 
-              {!isRestricted && (
+              {!isRestrictedRole && (
                 <AccordionSection title="Configurações e Suporte" icon="⚙️" defaultOpen={activeSection === 'Configurações e Suporte'}>
                   <Link to="/app/planos" className={getLinkClass('/app/planos')}><IconCreditCard /> Planos</Link>
                   <Link to="/app/configuracoes" className={getLinkClass('/app/configuracoes')}><IconSettings /> Configurações</Link>
@@ -218,7 +210,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
           </>
         )}
 
-        {can('financas_pessoais') && activeWorkspace?.tipo !== 'PF' && (
+        {canAccess('financas_pessoais') && !isPf && (
           <div className="border-t border-gray-200 pt-2 mt-2">
             <Link to="/app/financas-pessoais" className={getLinkClass('/app/financas-pessoais')}>
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

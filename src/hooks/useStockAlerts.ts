@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { fetchApi, ApiError } from '../lib/api';
 import { usePoll } from './usePoll';
+import { useAuth } from '../context/AuthContext';
 
 interface StockAlert {
   id: string;
@@ -26,13 +27,13 @@ interface AlertsResponse {
  * - Tipagem completa sem "any"
  */
 export function useStockAlerts() {
+  const { isAuthenticated } = useAuth();
   const [count, setCount] = useState(0);
   const [products, setProducts] = useState<StockAlert[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetch = useCallback(async () => {
-    const hasUser = localStorage.getItem('@LancePeloZap:activeStoreId');
-    if (!hasUser) return;
+    if (!isAuthenticated) return;
 
     // Cancela request anterior se ainda estiver pendente
     if (abortRef.current) abortRef.current.abort();
@@ -52,7 +53,7 @@ export function useStockAlerts() {
       }
       // Falha silenciosa (pode estar offline ou sem permissão)
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Polling a cada 60s, pausado quando a aba está oculta
   usePoll(fetch, 60_000);

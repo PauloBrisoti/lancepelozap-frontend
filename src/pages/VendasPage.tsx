@@ -24,11 +24,8 @@ const formatMoney = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDi
 const formatDataHora = (iso: string) => formatDateTimeBR(iso);
 
 export function VendasPage() {
-  const { activeStoreId, user, activeWorkspace } = useAuth();
+  const { activeStoreId, user, isRestrictedRole } = useAuth();
   // VENDEDOR/CAIXA vê só as próprias vendas, sem indicadores de margem/custo
-  const isRestricted = !user?.isImpersonating && activeWorkspace
-    ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role)
-    : false;
   const storeId = activeStoreId || user?.workspaces?.[0]?.id || '';
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -233,7 +230,7 @@ export function VendasPage() {
     summary.addRow(['Produtos Vendidos', `${totalProdutosVendidos} itens`]);
     summary.addRow(['Vendas Concluídas', `${vendasConcluidas} pedidos`]);
     summary.addRow(['Pagamentos Pendentes', `R$ ${formatMoney(valorPagamentosPendentes)}`]);
-    if (!isRestricted) {
+    if (!isRestrictedRole) {
       summary.addRow(['Margem Média', `${margemMedia.toFixed(1)}%`]);
       summary.addRow(['CMV', `R$ ${formatMoney(cmvTotalPeriodo)}`]);
       summary.addRow(['Lucro Bruto', `R$ ${formatMoney(lucroLiquidoPeriodo)}`]);
@@ -366,7 +363,7 @@ export function VendasPage() {
           <p className="text-sm md:text-2xl font-bold leading-tight">{vendasConcluidas} <span className="text-[10px] md:text-sm font-normal text-brand-200">pedidos</span></p>
         </div>
 
-        {!isRestricted && (
+        {!isRestrictedRole && (
           <>
             <div className="bg-white p-2 md:p-4 rounded-xl shadow-sm border border-gray-200">
               <div className="flex justify-between items-center mb-1 md:mb-2">
@@ -423,7 +420,7 @@ export function VendasPage() {
             <option value="PENDENTE">Pendentes</option>
             <option value="CANCELADA">Canceladas</option>
           </select>
-          {!isRestricted && vendedoresLista.length > 0 && (
+          {!isRestrictedRole && vendedoresLista.length > 0 && (
             <select
               value={filterVendedor}
               onChange={e => setFilterVendedor(e.target.value)}
@@ -477,7 +474,7 @@ export function VendasPage() {
                       Data {sortDir === 'desc' ? '↓' : '↑'}
                     </th>
                     <th className="px-6 py-4">Cliente</th>
-                    {!isRestricted && <th className="px-6 py-4">Vendedor</th>}
+                    {!isRestrictedRole && <th className="px-6 py-4">Vendedor</th>}
                     <th className="px-6 py-4">Produtos</th>
                     <th className="px-6 py-4">Total</th>
                     <th className="px-6 py-4">Pagamento</th>
@@ -490,7 +487,7 @@ export function VendasPage() {
                     <tr key={sale.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedSale(sale)}>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">{formatDataHora(sale.dataVenda)}</td>
                       <td className="px-6 py-4">{formatNome(sale.customer?.nomeCompleto || 'Cliente Balcão')}</td>
-                      {!isRestricted && <td className="px-6 py-4 text-sm text-gray-600">{sale.user?.nome || '—'}</td>}
+                      {!isRestrictedRole && <td className="px-6 py-4 text-sm text-gray-600">{sale.user?.nome || '—'}</td>}
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 max-w-sm">
                           {sale.saleItems?.map((i: SaleItem) => (
@@ -743,7 +740,7 @@ export function VendasPage() {
                   <span>- R$ {formatMoney(Number(selectedSale.valorTaxasGateway))}</span>
                 </div>
               )}
-              {!isRestricted && (
+              {!isRestrictedRole && (
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600">Custo das Mercadorias (CMV)</span>
                   <span className="font-medium text-red-600">- R$ {formatMoney(Number(selectedSale.cmvTotal))}</span>
@@ -753,7 +750,7 @@ export function VendasPage() {
                 <span>Total Pago</span>
                 <span>R$ {formatMoney(Number(selectedSale.valorTotalLiquido))}</span>
               </div>
-              {!isRestricted && selectedSale.margemLiquida !== undefined && (
+              {!isRestrictedRole && selectedSale.margemLiquida !== undefined && (
                 <div className="flex justify-between items-center mt-2 p-3 bg-emerald-50 rounded-lg">
                   <div>
                     <p className="text-sm font-semibold text-emerald-800">Margem Bruta</p>

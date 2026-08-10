@@ -82,14 +82,14 @@ function AppFinanceiro() {
 }
 
 function FeatureGuard({ children, feature }: { children: React.ReactNode; feature?: string }) {
-  const { activeWorkspace } = useAuth();
+  const { isPf } = useAuth();
   const location = useLocation();
 
   const storeRoutes = ['pdv','caixa','vendas','os','agenda','orcamentos','compras',
     'fornecedores','comissoes','devolucoes','relatorios','estoque','transferencias',
     'inventario','financeiro','clientes','whatsapp','campanhas','fiado'];
 
-  if (activeWorkspace?.tipo === 'PF' && feature !== 'financas_pessoais') {
+  if (isPf && feature !== 'financas_pessoais') {
     const currentPath = location.pathname.replace('/app/', '').split('/')[0];
     if (storeRoutes.includes(currentPath)) {
       return <Navigate to="/app" replace />;
@@ -103,14 +103,10 @@ const RESTRICTED_BLOCKED_PATHS = ['dashboard-pj', 'insights', 'bi', 'relatorios'
   'planos', 'configuracoes', 'importacao-legada', 'importar-planilha'];
 
 function StoreRoleGuard({ children }: { children: React.ReactNode }) {
-  const { user, activeWorkspace } = useAuth();
+  const { isRestrictedRole } = useAuth();
   const location = useLocation();
 
-  const isRestricted = !user?.isImpersonating && activeWorkspace
-    ? ['VENDEDOR', 'CAIXA'].includes(activeWorkspace.role)
-    : false;
-
-  if (isRestricted) {
+  if (isRestrictedRole) {
     const currentPath = location.pathname.replace('/app/', '').split('/')[0];
     if (currentPath === '' || RESTRICTED_BLOCKED_PATHS.includes(currentPath)) {
       return <Navigate to="/app/vendas" replace />;

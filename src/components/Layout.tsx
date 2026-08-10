@@ -10,7 +10,7 @@ import { TrialBanner } from './TrialBanner';
 
 export function Layout() {
   const navigate = useNavigate();
-  const { logout, user, activeWorkspace } = useAuth();
+  const { logout, user, isPf } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -20,13 +20,13 @@ export function Layout() {
 
   return (
     <div className={`flex min-h-screen font-sans text-gray-900 ${
-      activeWorkspace?.tipo === 'PF' ? 'bg-emerald-50/30' : 'bg-gray-50'
+      isPf ? 'bg-emerald-50/30' : 'bg-gray-50'
     }`}>
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col min-w-0 h-screen">
         {user?.isImpersonating && (
           <div className="bg-orange-500 text-white px-2 py-2 md:px-4 text-center text-xs md:text-sm font-bold flex flex-col md:flex-row justify-between items-center z-50 gap-2">
-            <span>⚠️ SUPORTE: Você está acessando o painel de {activeWorkspace?.tipo === 'PF' ? 'um usuário' : 'um lojista'}.</span>
+            <span>⚠️ SUPORTE: Você está acessando o painel de {isPf ? 'um usuário' : 'um lojista'}.</span>
             <div className="flex gap-2">
               <button
                 onClick={() => {
