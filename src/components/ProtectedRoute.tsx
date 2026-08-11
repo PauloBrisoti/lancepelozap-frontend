@@ -24,7 +24,7 @@ export function ProtectedRoute({ children }: Props) {
   } else if (loadingSub) {
     subscriptionBlocked = null;
   } else {
-    const data = (error as ApiError).data;
+    const data = (error as ApiError | null)?.data;
     const expired = !!error && typeof data === 'object' && data !== null &&
       (data as { code?: string }).code === 'SUBSCRIPTION_EXPIRED';
     subscriptionBlocked = expired || isSubscriptionBlocked(sub?.statusPagamento);

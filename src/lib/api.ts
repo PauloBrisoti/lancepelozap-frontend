@@ -84,6 +84,9 @@ export async function fetchApi<T = any>(
       headers,
       credentials: 'include',
       signal: abortController.signal,
+      // Nunca usar cache HTTP da API: o backend responde 304 com If-None-Match
+      // e, sem corpo, o response.json() abaixo falharia (sessão "perdida").
+      cache: 'no-store',
     });
 
     if (!response.ok) {
