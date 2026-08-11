@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchApi } from '../lib/api';
-import toast from 'react-hot-toast';
+import { useCreateStore } from '../hooks/useCreateStore';
 import { X } from 'lucide-react';
 
 export function ContextSwitcher() {
   const { user, activeWorkspace, switchWorkspace } = useAuth();
+  const { creating: creatingStore, createStore } = useCreateStore();
   const [isOpen, setIsOpen] = useState(false);
   const [showNewStore, setShowNewStore] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
-  const [creatingStore, setCreatingStore] = useState(false);
 
   if (user?.role === 'SUPER_ADMIN' && !user?.isImpersonating) {
     return null;
@@ -96,22 +95,11 @@ export function ContextSwitcher() {
             </div>
             <form onSubmit={async (e) => {
               e.preventDefault();
-              if (!newStoreName.trim()) return toast.error('Nome da loja é obrigatório');
-              setCreatingStore(true);
-              try {
-                await fetchApi('/stores/my', {
-                  method: 'POST',
-                  body: JSON.stringify({ nomeFantasia: newStoreName.trim() }),
-                });
-                toast.success('Loja criada! Recarregando...');
-                setShowNewStore(false);
-                setNewStoreName('');
-                window.location.reload();
-              } catch (err: unknown) {
-                toast.error(err instanceof Error ? err.message : 'Erro ao criar loja');
-              } finally {
-                setCreatingStore(false);
-              }
+              const created = await createStore(newStoreName);
+              if (!created) return;
+              setShowNewStore(false);
+              setNewStoreName('');
+              window.location.reload();
             }}>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
