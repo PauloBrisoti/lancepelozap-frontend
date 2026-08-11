@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useApiQuery } from '../lib/query';
+import { saldoRestante } from '../utils/financeiro';
 import type { Receivable } from '../types/api';
 
 export interface ReceivableDerived {
@@ -25,7 +26,7 @@ export function deriveReceivable(r: Receivable, hoje: Date = new Date()): Receiv
   const isPago = status === 'PAGO';
   const isParcial = status === 'PAGO_PARCIAL';
   const isVencido = status === 'VENCIDO';
-  const saldo = r.saldoRestante ?? Number(r.valorParcela);
+  const saldo = saldoRestante(r);
   const temParcial = r.saldoRestante !== undefined && r.saldoRestante > 0 && r.saldoRestante < Number(r.valorParcela);
   const diasAtraso = isVencido
     ? Math.max(1, Math.floor((hoje.getTime() - new Date(r.dataVencimento).getTime()) / 86400000))
@@ -68,15 +69,15 @@ export function useFiado() {
 
   const totalPendente = receivables
     .filter(r => r.statusExibicao !== 'PAGO')
-    .reduce((acc, r) => acc + (r.saldoRestante ?? Number(r.valorParcela)), 0);
+    .reduce((acc, r) => acc + saldoRestante(r), 0);
 
   const totalVencido = receivables
     .filter(r => new Date(r.dataVencimento) < hoje && r.statusExibicao !== 'PAGO')
-    .reduce((acc, r) => acc + (r.saldoRestante ?? Number(r.valorParcela)), 0);
+    .reduce((acc, r) => acc + saldoRestante(r), 0);
 
   const totalEmDia = receivables
     .filter(r => new Date(r.dataVencimento) >= hoje && r.statusExibicao !== 'PAGO')
-    .reduce((acc, r) => acc + (r.saldoRestante ?? Number(r.valorParcela)), 0);
+    .reduce((acc, r) => acc + saldoRestante(r), 0);
 
   const countBy = (status: string) => receivables.filter(r => r.statusExibicao === status).length;
 
@@ -93,7 +94,7 @@ export function useFiado() {
 
   const totalFiltrado = filtered
     .filter(r => r.statusExibicao !== 'PAGO')
-    .reduce((acc, r) => acc + (r.saldoRestante ?? Number(r.valorParcela)), 0);
+    .reduce((acc, r) => acc + saldoRestante(r), 0);
 
   const hasFilters = search.trim() !== '' || filter !== 'all';
 
