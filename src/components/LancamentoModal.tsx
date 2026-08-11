@@ -1,11 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from './Modal';
 import { formatDateBR } from '../lib/dates';
 import { formatBRL } from '../utils/format';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
-import { useAuth } from '../context/AuthContext';
-import type { Wallet, Customer, FinancialCategory } from '../hooks/useFinanceiroDashboard';
+import { useApiQuery, STALE_TIMES, useWallets } from '../lib/query';
+import type { Customer, FinancialCategory } from '../hooks/useFinanceiroDashboard';
 
 export interface LancamentoForm {
   id: string;
@@ -42,6 +41,7 @@ type TipoLancamento = 'RECEITA' | 'DESPESA_VISTA' | 'CONTA_PAGAR';
 interface Props {
   open: boolean;
   onClose: () => void;
+  activeStoreId: string | null;
   tipoLancamento: TipoLancamento;
   onTipoLancamentoChange: (tipo: TipoLancamento) => void;
   formTx: LancamentoForm;
@@ -51,12 +51,19 @@ interface Props {
   onSubmitTx: (e: FormEvent) => void;
   onSubmitPayable: (e: FormEvent) => void;
   onCriarCategoria: (tipo: 'ENTRADA' | 'SAIDA') => Promise<void>;
+  /** Modo "criar categoria" ativo (estado vem do container via useFinanceiroModals) */
+  criarCategoriaAberto: boolean;
+  novaCategoriaNome: string;
+  setNovaCategoriaNome: (nome: string) => void;
+  abrirCriarCategoria: () => void;
+  cancelarCriarCategoria: () => void;
 }
 
 /** Modal unificado de lançamento: Receita / Despesa à Vista / Conta a Pagar */
 export function LancamentoModal({
   open,
   onClose,
+  activeStoreId,
   tipoLancamento,
   onTipoLancamentoChange,
   formTx,
@@ -66,18 +73,16 @@ export function LancamentoModal({
   onSubmitTx,
   onSubmitPayable,
   onCriarCategoria,
+  criarCategoriaAberto,
+  novaCategoriaNome,
+  setNovaCategoriaNome,
+  abrirCriarCategoria,
+  cancelarCriarCategoria,
 }: Props) {
   const queryClient = useQueryClient();
-  const { activeStoreId } = useAuth();
-  const [novaCategoriaMode, setNovaCategoriaMode] = useState<'tx' | null>(null);
-  const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
 
   // Dados próprios do modal (carteiras, clientes, categorias) via cache React Query
-  const walletsQ = useApiQuery<{ wallets: Wallet[] }>(
-    ['finance-dashboard', activeStoreId],
-    '/finance/dashboard',
-    { staleTime: STALE_TIMES.FREQUENT, enabled: open }
-  );
+  const walletsQ = useWallets(activeStoreId, open);
   const customersQ = useApiQuery<Customer[]>(
     ['customers', activeStoreId],
     '/customers',
@@ -138,25 +143,18 @@ export function LancamentoModal({
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                {novaCategoriaMode === 'tx' ? (
-                  <div className="flex gap-1">
-                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA'); } }} />
-                    <button type="button" onClick={() => handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
-                    <button type="button" onClick={() => { setNovaCategoriaMode(null); setNovaCategoriaNome(''); }} className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">✕</button>
-                  </div>
-                ) : (
-                  <select className="w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none bg-white" value={formTx.categoria} onChange={e => {
-                    if (e.target.value === '__NOVA__') {
-                      setNovaCategoriaMode('tx');
-                      setNovaCategoriaNome('');
-                    } else {
-                      setFormTx({ ...formTx, categoria: e.target.value });
-                    }
-                  }}>
-                    <option value="">Selecione...</option>
-                    <CategoryGroups categories={categories} tipo={formTx.tipo} />
-                  </select>
-                )}
+                <CategoriaField
+                  categories={categories}
+                  tipo={formTx.tipo}
+                  value={formTx.categoria}
+                  onChange={v => setFormTx({ ...formTx, categoria: v })}
+                  aberto={criarCategoriaAberto}
+                  nome={novaCategoriaNome}
+                  setNome={setNovaCategoriaNome}
+                  abrir={abrirCriarCategoria}
+                  cancelar={cancelarCriarCategoria}
+                  confirmar={() => handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA')}
+                />
               </div>
             </div>
             <div className="flex gap-4">
@@ -178,38 +176,23 @@ export function LancamentoModal({
             </div>
 
             {!formTx.id && (
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-gray-700">
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={formTx.isParcelado} onChange={e => setFormTx({ ...formTx, isParcelado: e.target.checked })} />
-                  Lançamento Parcelado / Recorrente
-                </label>
-
-                {formTx.isParcelado && (
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
-                      <input type="number" min="2" max="120" className="w-full px-3 py-1.5 border rounded-lg text-sm" value={formTx.numeroParcelas} onChange={e => setFormTx({ ...formTx, numeroParcelas: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Frequência</label>
-                      <select className="w-full px-3 py-1.5 border rounded-lg text-sm" value={formTx.frequencia} onChange={e => setFormTx({ ...formTx, frequencia: e.target.value })}>
-                        <option value="MENSAL">Mensal</option>
-                        <option value="QUINZENAL">Quinzenal</option>
-                        <option value="SEMANAL">Semanal</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2 flex items-center gap-2">
-                      <input type="checkbox" id="firstPaid" className="w-4 h-4 rounded border-gray-300 text-indigo-600" checked={formTx.isFirstPaid} onChange={e => setFormTx({ ...formTx, isFirstPaid: e.target.checked })} />
-                      <label htmlFor="firstPaid" className="text-xs font-medium text-gray-700 cursor-pointer">
-                        A 1ª parcela ({formTx.dataTransacao ? formatDateBR(formTx.dataTransacao) : 'hoje'}) já está paga?
-                      </label>
-                    </div>
-                    <div className="col-span-2 text-xs text-gray-500 mt-1">
-                      O valor inserido de <b>R$ {formTx.valor || '0,00'}</b> será o valor de <b>cada parcela</b>.
-                    </div>
+              <ParcelamentoFields
+                isParcelado={formTx.isParcelado}
+                onToggleParcelado={v => setFormTx({ ...formTx, isParcelado: v })}
+                numeroParcelas={formTx.numeroParcelas}
+                onNumeroParcelas={v => setFormTx({ ...formTx, numeroParcelas: v })}
+                frequencia={formTx.frequencia}
+                onFrequencia={v => setFormTx({ ...formTx, frequencia: v })}
+                isFirstPaid={formTx.isFirstPaid}
+                onFirstPaid={v => setFormTx({ ...formTx, isFirstPaid: v })}
+                checkboxId="firstPaid"
+                primeiraDataLabel={formTx.dataTransacao ? formatDateBR(formTx.dataTransacao) : 'hoje'}
+                footer={
+                  <div className="col-span-2 text-xs text-gray-500 mt-1">
+                    O valor inserido de <b>R$ {formTx.valor || '0,00'}</b> será o valor de <b>cada parcela</b>.
                   </div>
-                )}
-              </div>
+                }
+              />
             )}
 
             <div>
@@ -246,61 +229,39 @@ export function LancamentoModal({
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                {novaCategoriaMode === 'tx' ? (
-                  <div className="flex gap-1">
-                    <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCriarCategoria('SAIDA'); } }} />
-                    <button type="button" onClick={() => handleCriarCategoria('SAIDA')} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
-                    <button type="button" onClick={() => { setNovaCategoriaMode(null); setNovaCategoriaNome(''); }} className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">✕</button>
-                  </div>
-                ) : (
-                  <select className="w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none bg-white" value={formPayable.categoria} onChange={e => {
-                    if (e.target.value === '__NOVA__') {
-                      setNovaCategoriaMode('tx');
-                      setNovaCategoriaNome('');
-                    } else {
-                      setFormPayable({ ...formPayable, categoria: e.target.value });
-                    }
-                  }}>
-                    <option value="">Selecione...</option>
-                    <CategoryGroups categories={categories} tipo="SAIDA" />
-                  </select>
-                )}
+                <CategoriaField
+                  categories={categories}
+                  tipo="SAIDA"
+                  value={formPayable.categoria}
+                  onChange={v => setFormPayable({ ...formPayable, categoria: v })}
+                  aberto={criarCategoriaAberto}
+                  nome={novaCategoriaNome}
+                  setNome={setNovaCategoriaNome}
+                  abrir={abrirCriarCategoria}
+                  cancelar={cancelarCriarCategoria}
+                  confirmar={() => handleCriarCategoria('SAIDA')}
+                />
               </div>
             </div>
 
             {!formPayable.id && (
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-gray-700">
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={formPayable.isParcelado} onChange={e => setFormPayable({ ...formPayable, isParcelado: e.target.checked })} />
-                  Conta Parcelada
-                </label>
-
-                {formPayable.isParcelado && (
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
-                      <input type="number" min="2" max="120" className="w-full px-3 py-1.5 border rounded-lg text-sm" value={formPayable.numeroParcelas} onChange={e => setFormPayable({ ...formPayable, numeroParcelas: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Frequência</label>
-                      <select className="w-full px-3 py-1.5 border rounded-lg text-sm" value={formPayable.frequencia} onChange={e => setFormPayable({ ...formPayable, frequencia: e.target.value })}>
-                        <option value="MENSAL">Mensal</option>
-                        <option value="QUINZENAL">Quinzenal</option>
-                        <option value="SEMANAL">Semanal</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2 flex items-center gap-2">
-                      <input type="checkbox" id="firstPaidPayable" className="w-4 h-4 rounded border-gray-300 text-indigo-600" checked={formPayable.isFirstPaid} onChange={e => setFormPayable({ ...formPayable, isFirstPaid: e.target.checked })} />
-                      <label htmlFor="firstPaidPayable" className="text-xs font-medium text-gray-700 cursor-pointer">
-                        A 1ª parcela ({formPayable.dataVencimento ? formatDateBR(formPayable.dataVencimento) : 'hoje'}) já está paga?
-                      </label>
-                    </div>
-                    <div className="col-span-2 text-xs text-gray-500 mt-1">
-                      Valor total da conta: <b>{formatBRL(Number(formPayable.valor || 0))}</b>. Serão <b>{formPayable.numeroParcelas}x</b> de <b>{formatBRL(Number(formPayable.valor || 0) / formPayable.numeroParcelas)}</b> cada.
-                    </div>
+              <ParcelamentoFields
+                isParcelado={formPayable.isParcelado}
+                onToggleParcelado={v => setFormPayable({ ...formPayable, isParcelado: v })}
+                numeroParcelas={formPayable.numeroParcelas}
+                onNumeroParcelas={v => setFormPayable({ ...formPayable, numeroParcelas: v })}
+                frequencia={formPayable.frequencia}
+                onFrequencia={v => setFormPayable({ ...formPayable, frequencia: v })}
+                isFirstPaid={formPayable.isFirstPaid}
+                onFirstPaid={v => setFormPayable({ ...formPayable, isFirstPaid: v })}
+                checkboxId="firstPaidPayable"
+                primeiraDataLabel={formPayable.dataVencimento ? formatDateBR(formPayable.dataVencimento) : 'hoje'}
+                footer={
+                  <div className="col-span-2 text-xs text-gray-500 mt-1">
+                    Valor total da conta: <b>{formatBRL(Number(formPayable.valor || 0))}</b>. Serão <b>{formPayable.numeroParcelas}x</b> de <b>{formatBRL(Number(formPayable.valor || 0) / formPayable.numeroParcelas)}</b> cada.
                   </div>
-                )}
-              </div>
+                }
+              />
             )}
           </>
         )}
@@ -349,5 +310,98 @@ function CategoryGroups({ categories, tipo }: { categories: FinancialCategory[];
       <option disabled>──────────</option>
       <option value="__NOVA__" className="text-brand-600 font-medium">✚ Criar nova categoria...</option>
     </>
+  );
+}
+
+interface CategoriaFieldProps {
+  categories: FinancialCategory[];
+  tipo: string;
+  value: string;
+  onChange: (value: string) => void;
+  aberto: boolean;
+  nome: string;
+  setNome: (nome: string) => void;
+  abrir: () => void;
+  cancelar: () => void;
+  confirmar: () => void;
+}
+
+/** Select de categoria com opção inline de criar nova (bloco compartilhado por Receita/Despesa e Conta a Pagar) */
+function CategoriaField({ categories, tipo, value, onChange, aberto, nome, setNome, abrir, cancelar, confirmar }: CategoriaFieldProps) {
+  if (aberto) {
+    return (
+      <div className="flex gap-1">
+        <input type="text" autoFocus placeholder="Nome da nova categoria..." className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none text-sm" value={nome} onChange={e => setNome(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmar(); } }} />
+        <button type="button" onClick={confirmar} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">OK</button>
+        <button type="button" onClick={cancelar} className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">✕</button>
+      </div>
+    );
+  }
+  return (
+    <select className="w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none bg-white" value={value} onChange={e => {
+      if (e.target.value === '__NOVA__') {
+        setNome('');
+        abrir();
+      } else {
+        onChange(e.target.value);
+      }
+    }}>
+      <option value="">Selecione...</option>
+      <CategoryGroups categories={categories} tipo={tipo} />
+    </select>
+  );
+}
+
+interface ParcelamentoFieldsProps {
+  isParcelado: boolean;
+  onToggleParcelado: (v: boolean) => void;
+  numeroParcelas: number;
+  onNumeroParcelas: (v: number) => void;
+  frequencia: string;
+  onFrequencia: (v: string) => void;
+  isFirstPaid: boolean;
+  onFirstPaid: (v: boolean) => void;
+  checkboxId: string;
+  primeiraDataLabel: string;
+  footer: ReactNode;
+}
+
+/** Bloco "Parcelado / Recorrente" compartilhado por Receita/Despesa e Conta a Pagar */
+function ParcelamentoFields({
+  isParcelado, onToggleParcelado, numeroParcelas, onNumeroParcelas,
+  frequencia, onFrequencia, isFirstPaid, onFirstPaid,
+  checkboxId, primeiraDataLabel, footer,
+}: ParcelamentoFieldsProps) {
+  return (
+    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
+      <label className="flex items-center gap-2 cursor-pointer font-medium text-gray-700">
+        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={isParcelado} onChange={e => onToggleParcelado(e.target.checked)} />
+        Lançamento Parcelado / Recorrente
+      </label>
+
+      {isParcelado && (
+        <div className="grid grid-cols-2 gap-4 mt-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
+            <input type="number" min="2" max="120" className="w-full px-3 py-1.5 border rounded-lg text-sm" value={numeroParcelas} onChange={e => onNumeroParcelas(Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Frequência</label>
+            <select className="w-full px-3 py-1.5 border rounded-lg text-sm" value={frequencia} onChange={e => onFrequencia(e.target.value)}>
+              <option value="MENSAL">Mensal</option>
+              <option value="QUINZENAL">Quinzenal</option>
+              <option value="SEMANAL">Semanal</option>
+            </select>
+          </div>
+          <div className="col-span-2 flex items-center gap-2">
+            <input type="checkbox" id={checkboxId} className="w-4 h-4 rounded border-gray-300 text-indigo-600" checked={isFirstPaid} onChange={e => onFirstPaid(e.target.checked)} />
+            <label htmlFor={checkboxId} className="text-xs font-medium text-gray-700 cursor-pointer">
+              A 1ª parcela ({primeiraDataLabel}) já está paga?
+            </label>
+          </div>
+          {footer}
+        </div>
+      )}
+    </div>
   );
 }

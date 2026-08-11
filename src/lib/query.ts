@@ -16,6 +16,7 @@ import {
 } from '@tanstack/react-query';
 import { fetchApi, ApiError } from './api';
 import type { Customer, Product, SuperAdminDashboard } from '../types/api';
+import type { Wallet } from '../hooks/useFinanceiroDashboard';
 
 // ============================================================
 // CONSTANTES DE CACHE
@@ -100,5 +101,18 @@ export function useCustomers(storeId: string | null) {
     ['customers', storeId],
     '/customers',
     { staleTime: STALE_TIMES.NORMAL, enabled: !!storeId }
+  );
+}
+
+/**
+ * Carteiras financeiras de uma loja (via dashboard financeiro).
+ * Compartilhada pelos modais de lançamento e baixa para deduplicar
+ * a requisição e o cache entre eles.
+ */
+export function useWallets(storeId: string | null, enabled = true) {
+  return useApiQuery<{ wallets: Wallet[] }>(
+    ['finance-dashboard', storeId],
+    '/finance/dashboard',
+    { staleTime: STALE_TIMES.FREQUENT, enabled: !!storeId && enabled }
   );
 }

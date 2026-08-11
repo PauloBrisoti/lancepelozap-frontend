@@ -3,13 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
 import { TrendingUp, TrendingDown, Banknote, HandCoins, CalendarClock, Receipt, PiggyBank, Scale, Activity, Box, FileMinus, Wallet as WalletIcon, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useDateFilter } from '../hooks/useDateFilter';
+import { useDateFilter, type DatePeriod } from '../hooks/useDateFilter';
 import { useFinanceiroModals } from '../hooks/useFinanceiroModals';
 import { useFinanceiroDashboard } from '../hooks/useFinanceiroDashboard';
 import type { Transaction, Receivable, Payable } from '../hooks/useFinanceiroDashboard';
 import type { SaleItem } from '../types/api';
 import { formatDateBR, formatDateTimeBR } from '../lib/dates';
 import { formatBRL } from '../utils/format';
+import { saldoRestante } from '../utils/financeiro';
 import { PAYMENT_METHOD_COLORS } from '../utils/domainMaps';
 import { Modal } from '../components/Modal';
 import { LancamentoModal, type LancamentoForm, type PayableForm } from '../components/LancamentoModal';
@@ -22,11 +23,11 @@ export const FinanceiroPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'TRANSACOES' | 'RECEBER' | 'PAGAR' | 'DRE'>('TRANSACOES');
 
   // Date filter state
-  const [dateFilter, setDateFilter] = useState('THIS_MONTH');
+  const [dateFilter, setDateFilter] = useState<DatePeriod>('este_mes');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [diaInicioMes, setDiaInicioMes] = useState(1);
-  const { query: queryParams, start: periodStart, end: periodEnd } = useDateFilter(dateFilter as any, customStart || undefined, customEnd || undefined, diaInicioMes);
+  const { query: queryParams, start: periodStart, end: periodEnd } = useDateFilter(dateFilter, customStart || undefined, customEnd || undefined, diaInicioMes);
 
   useEffect(() => {
     fetchApi(`/store/my/${activeStoreId}/fiscal-config`).then((res: any) => {
@@ -387,15 +388,15 @@ export const FinanceiroPage: React.FC = () => {
 
       {/* PERÍODO */}
       <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 w-fit">
-        <button onClick={() => setDateFilter('TODAY')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'TODAY' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Hoje</button>
-        <button onClick={() => setDateFilter('LAST_7_DAYS')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'LAST_7_DAYS' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>7 Dias</button>
-        <button onClick={() => setDateFilter('THIS_MONTH')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'THIS_MONTH' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Este Mês</button>
-        <button onClick={() => setDateFilter('LAST_MONTH')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'LAST_MONTH' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Mês Passado</button>
+        <button onClick={() => setDateFilter('today')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'today' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Hoje</button>
+        <button onClick={() => setDateFilter('7d')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === '7d' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>7 Dias</button>
+        <button onClick={() => setDateFilter('este_mes')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'este_mes' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Este Mês</button>
+        <button onClick={() => setDateFilter('mes_passado')} className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-colors ${dateFilter === 'mes_passado' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Mês Passado</button>
 
         <div className="flex items-center gap-1.5 border-l border-gray-200 pl-2 ml-1">
-          <input type="date" className="w-24 sm:w-28 md:w-auto text-xs md:text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setDateFilter('CUSTOM'); }} />
+          <input type="date" className="w-24 sm:w-28 md:w-auto text-xs md:text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setDateFilter('personalizado'); }} />
           <span className="text-gray-400 text-xs shrink-0">–</span>
-          <input type="date" className="w-24 sm:w-28 md:w-auto text-xs md:text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setDateFilter('CUSTOM'); }} />
+          <input type="date" className="w-24 sm:w-28 md:w-auto text-xs md:text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setDateFilter('personalizado'); }} />
         </div>
       </div>
 
@@ -585,7 +586,7 @@ export const FinanceiroPage: React.FC = () => {
               </p>
               <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
                 Total de vendas do período (competência)
-                {dateFilter !== 'TODAY' && periodStart && periodEnd && <span className="block text-[10px] text-gray-400 mt-0.5">{formatDateBR(periodStart)} a {formatDateBR(periodEnd)}</span>}
+                {dateFilter !== 'today' && periodStart && periodEnd && <span className="block text-[10px] text-gray-400 mt-0.5">{formatDateBR(periodStart)} a {formatDateBR(periodEnd)}</span>}
               </p>
             </div>
           )}
@@ -634,7 +635,7 @@ export const FinanceiroPage: React.FC = () => {
               <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
                 Total pago em comissões no período
                 <span className="block text-[10px] text-emerald-600 font-semibold mt-0.5">Já incluída em Despesas Operacionais — desconta do Lucro</span>
-                {dateFilter !== 'TODAY' && periodStart && periodEnd && <span className="block text-[10px] text-gray-400 mt-0.5">{formatDateBR(periodStart)} a {formatDateBR(periodEnd)}</span>}
+                {dateFilter !== 'today' && periodStart && periodEnd && <span className="block text-[10px] text-gray-400 mt-0.5">{formatDateBR(periodStart)} a {formatDateBR(periodEnd)}</span>}
               </p>
             </div>
           )}
@@ -879,7 +880,7 @@ export const FinanceiroPage: React.FC = () => {
                   const isParcial = status === 'PAGO_PARCIAL';
                   const isVencido = status === 'VENCIDO';
                   const totalPago = rec.valorJaPago ?? 0;
-                  const saldoRestante = rec.saldoRestante ?? (Number(rec.valorParcela) - totalPago);
+                  const saldo = saldoRestante(rec);
                   return (
                     <tr key={rec.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/70 transition-colors">
                       <td className="px-3 md:px-4 py-2.5 md:py-3 text-center">
@@ -901,7 +902,7 @@ export const FinanceiroPage: React.FC = () => {
                           <span className="text-emerald-600">{formatBRL(0)}</span>
                         ) : (
                           <span className={isParcial ? 'text-amber-600' : 'text-gray-800'}>
-                            {formatBRL(saldoRestante)}
+                            {formatBRL(saldo)}
                           </span>
                         )}
                       </td>
@@ -1102,6 +1103,7 @@ export const FinanceiroPage: React.FC = () => {
       <LancamentoModal
         open={modais.lancamento}
         onClose={() => modais.closeLancamento()}
+        activeStoreId={activeStoreId}
         tipoLancamento={modais.tipoLancamento}
         onTipoLancamentoChange={handleTipoLancamentoChange}
         formTx={formTx}
@@ -1111,12 +1113,18 @@ export const FinanceiroPage: React.FC = () => {
         onSubmitTx={handleSalvarLancamento}
         onSubmitPayable={handleSalvarPayable}
         onCriarCategoria={handleCriarCategoria}
+        criarCategoriaAberto={modais.novaCategoriaMode !== null}
+        novaCategoriaNome={modais.novaCategoriaNome}
+        setNovaCategoriaNome={modais.setNovaCategoriaNome}
+        abrirCriarCategoria={() => modais.setNovaCategoriaMode('tx')}
+        cancelarCriarCategoria={() => { modais.setNovaCategoriaMode(null); modais.setNovaCategoriaNome(''); }}
       />
 
       <BaixaModal
         open={modais.baixa.isOpen}
         onClose={() => modais.closeBaixa()}
         rec={modais.baixa.rec ?? null}
+        activeStoreId={activeStoreId}
         valorPago={formBaixa.valorPago}
         setValorPago={valor => setFormBaixa(prev => ({ ...prev, valorPago: valor }))}
         walletId={formBaixa.walletId}
@@ -1128,6 +1136,7 @@ export const FinanceiroPage: React.FC = () => {
         open={modais.baixaPagar.isOpen}
         onClose={() => modais.closeBaixaPagar()}
         payable={modais.baixaPagar.payable ?? null}
+        activeStoreId={activeStoreId}
         walletId={formBaixaPagar.walletId}
         setWalletId={walletId => setFormBaixaPagar(prev => ({ ...prev, walletId }))}
         onSubmit={handleBaixaPagar}
