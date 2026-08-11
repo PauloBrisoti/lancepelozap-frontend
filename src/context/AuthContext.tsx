@@ -55,6 +55,7 @@ interface AuthContextType {
   switchStore: (storeId: string) => void;
   switchWorkspace: (workspaceId: string) => void;
   impersonate: (storeId: string) => Promise<void>;
+  revertImpersonate: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -229,6 +230,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/app';
   };
 
+  const revertImpersonate = async () => {
+    await fetchApi('/super-admin/revert-impersonate', { method: 'POST' });
+    setActiveStoreId(null);
+    setStoreIdCookie(null);
+    localStorage.removeItem(ACTIVE_STORE_KEY);
+    window.location.href = '/admin';
+  };
+
   const refreshUser = async () => {
     try {
       const data = await fetchApi('/auth/me');
@@ -243,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, activeStoreId, activeWorkspace, isPf, isRestrictedRole, canAccess, login, logout, switchStore, switchWorkspace, impersonate, refreshUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, loading, activeStoreId, activeWorkspace, isPf, isRestrictedRole, canAccess, login, logout, switchStore, switchWorkspace, impersonate, revertImpersonate, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

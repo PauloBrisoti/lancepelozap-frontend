@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { fetchApi } from '../lib/api';
 import { Sidebar } from './Sidebar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { NotificationBell } from './NotificationBell';
@@ -10,7 +9,7 @@ import { TrialBanner } from './TrialBanner';
 
 export function Layout() {
   const navigate = useNavigate();
-  const { logout, user, isPf } = useAuth();
+  const { logout, revertImpersonate, user, isPf } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -39,8 +38,7 @@ export function Layout() {
               <button
                 onClick={async () => {
                   try {
-                    await fetchApi('/super-admin/revert-impersonate', { method: 'POST' });
-                    window.location.href = '/admin';
+                    await revertImpersonate();
                   } catch (err: unknown) {
                     toast.error(err instanceof Error ? err.message : 'Erro ao sair');
                   }
