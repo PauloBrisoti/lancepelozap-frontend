@@ -1,38 +1,31 @@
 import React from 'react';
-import { useLocation, Link } from 'react-router';
+import { useLocation, Link, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { useStockAlerts } from '../hooks/useStockAlerts';
 import { AccordionSection } from './AccordionSection';
 import { ContextSwitcher } from './ContextSwitcher';
 import { AnnouncementsBanner } from './AnnouncementsBanner';
 import { PendingCountBadge } from './PendingCountBadge';
-import { fetchApi } from '../lib/api';
 import { TicketBadge } from './TicketBadge';
+import { isPathActive, activeSection } from '../utils/navigation';
 import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPackage, IconFinance, IconShoppingBag } from './icons';
 
 export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
-  const { user, activeWorkspace, isPf, isRestrictedRole, canAccess } = useAuth();
+  const navigate = useNavigate();
+  const { user, activeWorkspace, isPf, isRestrictedRole, canAccess, logout } = useAuth();
   const { count: alertCount } = useStockAlerts();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const showOperacional = ['caixa', 'ordem_servico', 'agenda', 'orcamentos', 'operacional_pet', 'devolucoes'].some(canAccess);
   const showEstoque = ['catalogo', 'transferencia_estoque', 'inventario', 'compras', 'fornecedores'].some(canAccess);
-  const isActivePath = (path: string) => {
-    const { pathname } = location;
-    if (path === '/app' || path === '/admin') return pathname === path;
-    return pathname === path || pathname.startsWith(`${path}/`);
-  };
-  const activeSection = (() => {
-    const { pathname } = location;
-    if (['/app/dashboard-pj', '/app/relatorios', '/app/insights', '/app/comissoes'].some(p => pathname === p || pathname.startsWith(`${p}/`))) return 'Gestão & Relatórios';
-    if (['/app/caixa', '/app/os', '/app/agenda', '/app/orcamentos', '/app/operacional-pet', '/app/devolucoes'].some(p => pathname === p || pathname.startsWith(`${p}/`))) return 'Operacional';
-    if (['/app/estoque', '/app/transferencias', '/app/inventario', '/app/compras', '/app/fornecedores'].some(p => pathname === p || pathname.startsWith(`${p}/`))) return 'Estoque & Suprimentos';
-    if (['/app/whatsapp', '/app/campanhas', '/app/chamados'].some(p => pathname === p || pathname.startsWith(`${p}/`))) return 'Comunicação';
-    if (['/app/planos', '/app/configuracoes', '/app/importacao-legada', '/app/importar-planilha'].some(p => pathname === p || pathname.startsWith(`${p}/`))) return 'Configurações e Suporte';
-    return '';
-  })();
+  const section = activeSection(location.pathname);
   const getLinkClass = (path: string) => {
-    const isActive = isActivePath(path);
+    const isActive = isPathActive(location.pathname, path);
     if (isPf) {
       return `flex items-center px-4 py-3 rounded-lg font-medium transition-colors ${
         isActive ? 'bg-emerald-200 text-emerald-800' : 'text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900'
@@ -102,7 +95,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
 
             <div className="border-t border-gray-200 pt-2 mt-2">
               {activeWorkspace?.tipo !== 'PF' && (
-                <AccordionSection title="Gestão & Relatórios" icon="📊" defaultOpen={activeSection === 'Gestão & Relatórios'}>
+                <AccordionSection title="Gestão & Relatórios" icon="📊" defaultOpen={section === 'Gestão & Relatórios'}>
                   {!isRestrictedRole && (!user?.features || user.features?.dashboard_pj) && <Link to="/app/dashboard-pj" className={getLinkClass('/app/dashboard-pj')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     Dashboard Consolidado
@@ -123,7 +116,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
               )}
 
               {showOperacional && (
-                <AccordionSection title="Operacional" icon="🛠️" defaultOpen={activeSection === 'Operacional'}>
+                <AccordionSection title="Operacional" icon="🛠️" defaultOpen={section === 'Operacional'}>
                   {(!user?.features || user.features?.caixa) && <Link to="/app/caixa" className={getLinkClass('/app/caixa')}>
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                     Controle de Caixa
@@ -151,7 +144,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
               )}
 
               {showEstoque && (
-                <AccordionSection title="Estoque & Suprimentos" icon="📦" defaultOpen={activeSection === 'Estoque & Suprimentos'}>
+                <AccordionSection title="Estoque & Suprimentos" icon="📦" defaultOpen={section === 'Estoque & Suprimentos'}>
                   {(!user?.features || user.features?.catalogo) && <Link to="/app/estoque" className={getLinkClass('/app/estoque')}>
                     <IconPackage /> Catálogo & Estoque
                     {alertCount > 0 && (
@@ -179,7 +172,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                 </AccordionSection>
               )}
 
-              <AccordionSection title="Comunicação" icon="💬" defaultOpen={activeSection === 'Comunicação'}>
+              <AccordionSection title="Comunicação" icon="💬" defaultOpen={section === 'Comunicação'}>
                 {(!user?.features || user.features?.whatsapp) && <Link to="/app/whatsapp" className={getLinkClass('/app/whatsapp')}>
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                   WhatsApp
@@ -195,7 +188,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
               </AccordionSection>
 
               {!isRestrictedRole && (
-                <AccordionSection title="Configurações e Suporte" icon="⚙️" defaultOpen={activeSection === 'Configurações e Suporte'}>
+                <AccordionSection title="Configurações e Suporte" icon="⚙️" defaultOpen={section === 'Configurações e Suporte'}>
                   <Link to="/app/planos" className={getLinkClass('/app/planos')}><IconCreditCard /> Planos</Link>
                   <Link to="/app/configuracoes" className={getLinkClass('/app/configuracoes')}><IconSettings /> Configurações</Link>
                   <Link to="/app/configuracoes/maquininha" className={getLinkClass('/app/configuracoes/maquininha')}>
@@ -282,12 +275,7 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
       <div className="p-4 border-t border-gray-200">
         <div className="md:hidden mb-3 px-2">
           <button
-            onClick={async () => {
-              try {
-                await fetchApi('/auth/logout', { method: 'POST' });
-              } catch {}
-              window.location.href = '/login';
-            }}
+            onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 font-semibold text-sm hover:bg-red-100 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>

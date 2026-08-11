@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
+import { isPathActive } from '../utils/navigation';
 import { IconHomeSm, IconShoppingBagSm, IconVendasSm, IconFinanceSm, IconClientsSm, IconMenuSm } from './icons';
 
 interface NavTab {
@@ -12,7 +13,7 @@ interface NavTab {
 export const MobileBottomNav = React.memo(function MobileBottomNav({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, activeWorkspace } = useAuth();
+  const { user, activeWorkspace, canAccess } = useAuth();
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' && !user?.isImpersonating;
   const isPf = activeWorkspace?.tipo === 'PF';
@@ -35,25 +36,15 @@ export const MobileBottomNav = React.memo(function MobileBottomNav({ onMenuClick
       { label: 'Financeiro', path: '/app/financeiro', icon: <IconFinanceSm /> },
     ];
   } else {
-    const can = (key: string) => {
-      const f = user?.features;
-      if (!f) return true;
-      return !!f[key];
-    };
     tabs = [
       { label: 'Início', path: '/app', icon: <IconHomeSm /> },
-      ...(can('pdv') ? [{ label: 'PDV', path: '/app/pdv', icon: <IconShoppingBagSm /> }] : []),
-      ...(can('vendas') ? [{ label: 'Vendas', path: '/app/vendas', icon: <IconVendasSm /> }] : []),
-      ...(can('financeiro') ? [{ label: 'Financeiro', path: '/app/financeiro', icon: <IconFinanceSm /> }] : []),
+      ...(canAccess('pdv') ? [{ label: 'PDV', path: '/app/pdv', icon: <IconShoppingBagSm /> }] : []),
+      ...(canAccess('vendas') ? [{ label: 'Vendas', path: '/app/vendas', icon: <IconVendasSm /> }] : []),
+      ...(canAccess('financeiro') ? [{ label: 'Financeiro', path: '/app/financeiro', icon: <IconFinanceSm /> }] : []),
     ];
   }
 
-  const isActive = (path: string) => {
-    if (path === '/app' || path === '/admin') {
-      return location.pathname === path;
-    }
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path: string) => isPathActive(location.pathname, path);
 
   const pfActiveColor = 'text-emerald-600';
   const pfInactiveColor = 'text-gray-400';
