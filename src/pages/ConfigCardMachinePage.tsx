@@ -3,6 +3,7 @@ import { fetchApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Trash2, Edit3, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useCrudList } from '../hooks/useCrudList';
 
 interface FeeConfig {
   id: string;
@@ -10,6 +11,14 @@ interface FeeConfig {
   parcelas: number;
   taxaPercentual: number;
   taxaFixa: number;
+  prazoRecebimento: number;
+}
+
+interface FeeForm {
+  formaPagamento: string;
+  parcelas: number;
+  taxaPercentual: string;
+  taxaFixa: string;
   prazoRecebimento: number;
 }
 
@@ -46,113 +55,133 @@ const ALL_DASHBOARD_CARDS = [
 
 function ConfigCardMachinePage() {
   const { activeStoreId } = useAuth();
-  const [fees, setFees] = useState<FeeConfig[]>([]);
-  const [loading, setLoading] = useState(true);
   const [cartaoImediato, setCartaoImediato] = useState(true);
   const [savingCardBehavior, setSavingCardBehavior] = useState(false);
   const [diaInicioMes, setDiaInicioMes] = useState(1);
   const [savingDiaInicioMes, setSavingDiaInicioMes] = useState(false);
   const [dashboardCards, setDashboardCards] = useState<string[]>(ALL_DASHBOARD_CARDS.map(c => c.key));
   const [savingDashboardCards, setSavingDashboardCards] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    formaPagamento: 'CARTAO_CREDITO',
-    parcelas: 1,
-    taxaPercentual: '',
-    taxaFixa: '',
-    prazoRecebimento: 30,
-  });
+  const [storeConfigLoading, setStoreConfigLoading] = useState(true);
 
-  const carregar = async () => {
-    try {
-      const stores: any[] = await fetchApi('/store/my');
-      const store = stores[0]?.stores?.[0];
-      const storeId = store?.id;
-
-      const [data, storeData, dashCfg] = await Promise.all([
-        fetchApi('/payment-fees'),
-        storeId ? Promise.resolve(store) : Promise.resolve(null),
-        storeId ? fetchApi(`/store/my/${storeId}/dashboard-config`).catch(() => null) : Promise.resolve(null),
-      ]);
-      setFees(data);
-      if (storeData) {
-        setCartaoImediato(storeData.cartaoImediato ?? true);
-        setDiaInicioMes(storeData.diaInicioMes ?? 1);
+  const fees = useCrudList<FeeConfig, FeeForm>({
+    endpoint: '/payment-fees',
+    loadList: () => fetchApi('/payment-fees'),
+    createDefault: () => ({ formaPagamento: 'CARTAO_CREDITO', parcelas: 1, taxaPercentual: '', taxaFixa: '', prazoRecebimento: 30 }),
+    toForm: fee => ({
+      formaPagamento: fee.formaPagamento,
+      parcelas: fee.parcelas,
+      taxaPercentual: String(fee.taxaPercentual),
+      taxaFixa: String(fee.taxaFixa),
+      prazoRecebimento: fee.prazoRecebimento,
+    }),
+    beforeSave: form => {
+      if (!form.taxaPercentual && !form.taxaFixa) {
+        throw new Error('Preencha ao menos a taxa percentual ou fixa');
       }
-      if (dashCfg?.cards) {
-        setDashboardCards(dashCfg.cards);
-      }
-    } catch {
-      toast.error('Erro ao carregar configurações');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { carregar(); }, [activeStoreId]);
-
-  const resetForm = () => {
-    setForm({ formaPagamento: 'CARTAO_CREDITO', parcelas: 1, taxaPercentual: '', taxaFixa: '', prazoRecebimento: 30 });
-    setEditingId(null);
-    setShowForm(false);
-  };
-
-  const handleSave = async () => {
-    if (!form.taxaPercentual && !form.taxaFixa) {
-      toast.error('Preencha ao menos a taxa percentual ou fixa');
-      return;
-    }
-    try {
-      const body = {
+      return {
         formaPagamento: form.formaPagamento,
         parcelas: Number(form.parcelas),
         taxaPercentual: Number(form.taxaPercentual) || 0,
         taxaFixa: Number(form.taxaFixa) || 0,
         prazoRecebimento: Number(form.prazoRecebimento),
       };
+    },
+    messages: {
+      loadError: 'Erro ao carregar configurações',
+      createSuccess: 'Taxa cadastrada',
+      updateSuccess: 'Taxa atualizada',
+      deleteSuccess: 'Configuração removida',
+      deleteConfirm: 'Remover esta configuração?',
+      saveError: 'Erro ao salvar',
+    },
+  });
 
-      if (editingId) {
-        await fetchApi(`/payment-fees/${editingId}`, { method: 'PUT', body: JSON.stringify(body) });
-        toast.success('Taxa atualizada');
-      } else {
-        await fetchApi('/payment-fees', { method: 'POST', body: JSON.stringify(body) });
-        toast.success('Taxa cadastrada');
+  const getStoreId = async (): Promise<string | null> => {
+    const stores: any[] = await fetchApi('/store/my');
+    return stores[0]?.stores?.[0]?.id ?? null;
+  };
+
+  const carregarStoreConfig = async () => {
+    const stores: any[] = await fetchApi('/store/my');
+    const store = stores[0]?.stores?.[0];
+    if (!store) return;
+    setCartaoImediato(store.cartaoImediato ?? true);
+    setDiaInicioMes(store.diaInicioMes ?? 1);
+    const dashCfg = await fetchApi(`/store/my/${store.id}/dashboard-config`).catch(() => null) as { cards?: string[] } | null;
+    if (dashCfg?.cards) {
+      setDashboardCards(dashCfg.cards);
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      setStoreConfigLoading(true);
+      try {
+        await carregarStoreConfig();
+      } catch {
+        toast.error('Erro ao carregar configurações');
+      } finally {
+        setStoreConfigLoading(false);
       }
-      resetForm();
-      carregar();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar');
-    }
-  };
+    })();
+  }, [activeStoreId]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Remover esta configuração?')) return;
+  const saveCardBehavior = async () => {
+    setSavingCardBehavior(true);
     try {
-      await fetchApi(`/payment-fees/${id}`, { method: 'DELETE' });
-      toast.success('Configuração removida');
-      carregar();
+      const storeId = await getStoreId();
+      if (!storeId) { toast.error('Loja não encontrada'); return; }
+      await fetchApi(`/store/my/${storeId}/card-behavior`, {
+        method: 'PATCH',
+        body: JSON.stringify({ cartaoImediato: !cartaoImediato })
+      });
+      setCartaoImediato(!cartaoImediato);
+      toast.success('Configuração salva');
     } catch {
-      toast.error('Erro ao remover');
+      toast.error('Erro ao salvar');
+    } finally {
+      setSavingCardBehavior(false);
     }
   };
 
-  const handleEdit = (fee: FeeConfig) => {
-    setForm({
-      formaPagamento: fee.formaPagamento,
-      parcelas: fee.parcelas,
-      taxaPercentual: String(fee.taxaPercentual),
-      taxaFixa: String(fee.taxaFixa),
-      prazoRecebimento: fee.prazoRecebimento,
-    });
-    setEditingId(fee.id);
-    setShowForm(true);
+  const saveDiaInicioMes = async () => {
+    setSavingDiaInicioMes(true);
+    try {
+      const storeId = await getStoreId();
+      if (!storeId) { toast.error('Loja não encontrada'); return; }
+      await fetchApi(`/store/my/${storeId}/fiscal-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({ diaInicioMes })
+      });
+      toast.success('Dia de início do mês salvo!');
+    } catch {
+      toast.error('Erro ao salvar');
+    } finally {
+      setSavingDiaInicioMes(false);
+    }
+  };
+
+  const saveDashboardCards = async () => {
+    setSavingDashboardCards(true);
+    try {
+      const storeId = await getStoreId();
+      if (!storeId) { toast.error('Loja não encontrada'); return; }
+      await fetchApi(`/store/my/${storeId}/dashboard-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({ cards: dashboardCards })
+      });
+      toast.success('Configuração do painel salva!');
+    } catch {
+      toast.error('Erro ao salvar');
+    } finally {
+      setSavingDashboardCards(false);
+    }
   };
 
   const pmLabel = (v: string) => FORMAS_PAGAMENTO.find(f => f.value === v)?.label || v;
   const prazoLabel = (v: number) => PRAZOS.find(p => p.value === v)?.label || `D+${v}`;
 
-  if (loading) {
+  if (fees.loading || storeConfigLoading) {
     return <div className="p-8 text-center text-gray-500">Carregando...</div>;
   }
 
@@ -164,7 +193,7 @@ function ConfigCardMachinePage() {
           <p className="text-sm text-gray-500 mt-1">Configure taxas e prazos de recebimento por bandeira e parcelamento</p>
         </div>
         <button
-          onClick={() => { resetForm(); setShowForm(true); }}
+          onClick={fees.openNew}
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition-colors shadow-sm text-sm"
         >
           <Plus className="w-4 h-4" />
@@ -172,49 +201,49 @@ function ConfigCardMachinePage() {
         </button>
       </div>
 
-      {showForm && (
+      {fees.modalOpen && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-4">{editingId ? 'Editar' : 'Nova'} Configuração</h3>
+          <h3 className="font-bold text-gray-800 mb-4">{fees.editing ? 'Editar' : 'Nova'} Configuração</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Forma Pagamento</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.formaPagamento} onChange={e => setForm({ ...form, formaPagamento: e.target.value })}>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={fees.form.formaPagamento} onChange={e => fees.setForm({ ...fees.form, formaPagamento: e.target.value })}>
                 {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Parcelas</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.parcelas} onChange={e => setForm({ ...form, parcelas: Number(e.target.value) })}>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={fees.form.parcelas} onChange={e => fees.setForm({ ...fees.form, parcelas: Number(e.target.value) })}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(p => <option key={p} value={p}>{p}x</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Taxa %</label>
-              <input type="number" step="0.01" min="0" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="3.99" value={form.taxaPercentual} onChange={e => setForm({ ...form, taxaPercentual: e.target.value })} />
+              <input type="number" step="0.01" min="0" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="3.99" value={fees.form.taxaPercentual} onChange={e => fees.setForm({ ...fees.form, taxaPercentual: e.target.value })} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Taxa Fixa (R$)</label>
-              <input type="number" step="0.01" min="0" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="0.50" value={form.taxaFixa} onChange={e => setForm({ ...form, taxaFixa: e.target.value })} />
+              <input type="number" step="0.01" min="0" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="0.50" value={fees.form.taxaFixa} onChange={e => fees.setForm({ ...fees.form, taxaFixa: e.target.value })} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Prazo Recebimento</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.prazoRecebimento} onChange={e => setForm({ ...form, prazoRecebimento: Number(e.target.value) })}>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={fees.form.prazoRecebimento} onChange={e => fees.setForm({ ...fees.form, prazoRecebimento: Number(e.target.value) })}>
                 {PRAZOS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleSave} className="flex items-center gap-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
+            <button onClick={fees.handleSave} disabled={fees.saving} className="flex items-center gap-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
               <Check className="w-4 h-4" /> Salvar
             </button>
-            <button onClick={resetForm} className="flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors">
+            <button onClick={fees.closeModal} className="flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors">
               <X className="w-4 h-4" /> Cancelar
             </button>
           </div>
         </div>
       )}
 
-      {fees.length === 0 ? (
+      {fees.items.length === 0 ? (
         <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-200 text-center text-gray-500">
           <p className="text-lg font-medium">Nenhuma taxa configurada</p>
           <p className="text-sm mt-1">Adicione as taxas da sua maquininha para calcular automaticamente nas vendas</p>
@@ -233,7 +262,7 @@ function ConfigCardMachinePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {fees.map(fee => (
+              {fees.items.map(fee => (
                 <tr key={fee.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">{pmLabel(fee.formaPagamento)}</td>
                   <td className="px-4 py-3 text-gray-600">{fee.parcelas}x</td>
@@ -242,10 +271,10 @@ function ConfigCardMachinePage() {
                   <td className="px-4 py-3 text-gray-600">{prazoLabel(fee.prazoRecebimento)}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => handleEdit(fee)} className="p-1.5 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
+                      <button onClick={() => fees.openEdit(fee)} className="p-1.5 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(fee.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
+                      <button onClick={() => fees.handleDelete(fee.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -271,23 +300,7 @@ function ConfigCardMachinePage() {
             </p>
           </div>
           <button
-            onClick={async () => {
-              setSavingCardBehavior(true);
-              try {
-                const storeId = (await fetchApi('/store/my').then((stores: any[]) => stores[0]?.stores?.[0]?.id));
-                if (!storeId) { toast.error('Loja não encontrada'); return; }
-                await fetchApi(`/store/my/${storeId}/card-behavior`, {
-                  method: 'PATCH',
-                  body: JSON.stringify({ cartaoImediato: !cartaoImediato })
-                });
-                setCartaoImediato(!cartaoImediato);
-                toast.success('Configuração salva');
-              } catch {
-                toast.error('Erro ao salvar');
-              } finally {
-                setSavingCardBehavior(false);
-              }
-            }}
+            onClick={saveCardBehavior}
             disabled={savingCardBehavior}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${cartaoImediato ? 'bg-brand-600' : 'bg-gray-300'}`}
           >
@@ -322,23 +335,7 @@ function ConfigCardMachinePage() {
               onChange={e => setDiaInicioMes(Number(e.target.value))}
             />
             <button
-              onClick={async () => {
-                setSavingDiaInicioMes(true);
-                try {
-                  const stores: any[] = await fetchApi('/store/my');
-                  const storeId = stores[0]?.stores?.[0]?.id;
-                  if (!storeId) { toast.error('Loja não encontrada'); return; }
-                  await fetchApi(`/store/my/${storeId}/fiscal-config`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ diaInicioMes })
-                  });
-                  toast.success('Dia de início do mês salvo!');
-                } catch {
-                  toast.error('Erro ao salvar');
-                } finally {
-                  setSavingDiaInicioMes(false);
-                }
-              }}
+              onClick={saveDiaInicioMes}
               disabled={savingDiaInicioMes}
               className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
             >
@@ -375,23 +372,7 @@ function ConfigCardMachinePage() {
           ))}
         </div>
         <button
-          onClick={async () => {
-            setSavingDashboardCards(true);
-            try {
-              const stores: any[] = await fetchApi('/store/my');
-              const storeId = stores[0]?.stores?.[0]?.id;
-              if (!storeId) { toast.error('Loja não encontrada'); return; }
-              await fetchApi(`/store/my/${storeId}/dashboard-config`, {
-                method: 'PATCH',
-                body: JSON.stringify({ cards: dashboardCards })
-              });
-              toast.success('Configuração do painel salva!');
-            } catch {
-              toast.error('Erro ao salvar');
-            } finally {
-              setSavingDashboardCards(false);
-            }
-          }}
+          onClick={saveDashboardCards}
           disabled={savingDashboardCards}
           className="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
         >

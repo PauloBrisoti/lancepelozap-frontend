@@ -6,6 +6,7 @@ import { formatDateBR, TZ_BR } from '../lib/dates';
 import toast from 'react-hot-toast';
 import { Modal } from '../components/Modal';
 import { StatusActions } from '../components/StatusActions';
+import { useModal } from '../hooks/useModal';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
 
 interface Customer { id: string; nomeCompleto: string; telefoneWhatsapp: string; }
@@ -24,7 +25,9 @@ export function AgendaPage() {
   const [currentDate, setCurrentDate] = useState(() => todayLocalDate());
   const [filterProf, setFilterProf] = useState('');
 
-  const [modal, setModal] = useState<'criar' | 'detalhe' | 'profissionais' | null>(null);
+  const criarModal = useModal();
+  const detalheModal = useModal();
+  const profissionaisModal = useModal();
   const [selected, setSelected] = useState<Appointment | null>(null);
   const [form, setForm] = useState({
     customerId: '', professionalId: '', servico: '', observacoes: '',
@@ -63,14 +66,14 @@ export function AgendaPage() {
       customerId: '', professionalId: filterProf, servico: '', observacoes: '',
       data: currentDate, hora: hora || '', duracaoMinutos: 60, valorCobrado: '',
     });
-    setModal('criar');
+    criarModal.openModal();
   };
 
   const openDetail = async (id: string) => {
     try {
       const data = await fetchApi(`/appointments/${id}`);
       setSelected(data);
-      setModal('detalhe');
+      detalheModal.openModal();
     } catch { toast.error('Erro ao carregar'); }
   };
 
@@ -83,7 +86,7 @@ export function AgendaPage() {
         body: JSON.stringify({ ...form, data: dataStr, valorCobrado: Number(form.valorCobrado || 0) }),
       });
       toast.success(`Agendamento criado para ${res.customer?.nomeCompleto || ''}`);
-      setModal(null);
+      criarModal.closeModal();
       await refetchAppointments();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
@@ -92,7 +95,7 @@ export function AgendaPage() {
     try {
       await fetchApi(`/appointments/${id}/${action}`, { method: 'POST' });
       toast.success('Status atualizado!');
-      setModal(null);
+      detalheModal.closeModal();
       await refetchAppointments();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
@@ -137,7 +140,7 @@ export function AgendaPage() {
           <p className="text-gray-500 text-sm mt-1">Gerencie agendamentos de serviços e horários.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setEditingProf(null); setProfForm({ nome: '', telefone: '', cor: '#6366f1', cargo: '' }); setModal('profissionais'); }}
+          <button onClick={() => { setEditingProf(null); setProfForm({ nome: '', telefone: '', cor: '#6366f1', cargo: '' }); profissionaisModal.openModal(); }}
             className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">
             Profissionais
           </button>
@@ -212,14 +215,14 @@ export function AgendaPage() {
 
       {/* MODAL: Create */}
       <Modal
-        open={modal === 'criar'}
-        onClose={() => setModal(null)}
+        open={criarModal.open}
+        onClose={criarModal.closeModal}
         size="md"
         rounded="xl" padded={false}
       >
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
           <h3 className="text-lg font-bold">Novo Agendamento</h3>
-          <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+          <button onClick={criarModal.closeModal} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -272,22 +275,22 @@ export function AgendaPage() {
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button onClick={() => setModal(null)} className="px-5 py-2 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200">Cancelar</button>
+          <button onClick={criarModal.closeModal} className="px-5 py-2 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200">Cancelar</button>
           <button onClick={handleCreate} className="px-5 py-2 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700">Criar</button>
         </div>
       </Modal>
 
       {/* MODAL: Detail */}
-      {modal === 'detalhe' && selected && (
+      {detalheModal.open && selected && (
         <Modal
-          open={modal === 'detalhe' && !!selected}
-          onClose={() => setModal(null)}
+          open={detalheModal.open}
+          onClose={detalheModal.closeModal}
           size="md"
           rounded="xl" padded={false}
         >
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
             <h3 className="text-lg font-bold">Detalhes do Agendamento</h3>
-            <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            <button onClick={detalheModal.closeModal} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex justify-between items-start">
@@ -326,13 +329,13 @@ export function AgendaPage() {
 
       {/* MODAL: Professionals */}
       <Modal
-        open={modal === 'profissionais'}
-        onClose={() => setModal(null)}
+        open={profissionaisModal.open}
+        onClose={profissionaisModal.closeModal}
         rounded="xl" maxHeight="80vh" padded={false}
       >
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0">
           <h3 className="text-lg font-bold">Profissionais</h3>
-          <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+          <button onClick={profissionaisModal.closeModal} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
         </div>
         <div className="p-6 space-y-6">
           <div className="bg-gray-50 p-4 rounded-lg space-y-3">
