@@ -6,6 +6,12 @@ import { useAuth } from '../context/AuthContext';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
 import { formatBRL } from '../utils/format';
 
+interface CommissionSummary {
+  totalPendente: number;
+  totalPagoEsteMes: number;
+  porVendedor: SellerSummary[];
+}
+
 interface SellerSummary {
   userId: string;
   nome: string;
@@ -45,7 +51,7 @@ export function ComissoesPage() {
   const [paymentPage, setPaymentPage] = useState(1);
   const paymentLimit = 20;
 
-  const { data: summary, isLoading, refetch: refetchSummary } = useApiQuery<any>(
+  const { data: summary, isLoading, refetch: refetchSummary } = useApiQuery<CommissionSummary>(
     ['commission', 'summary'],
     '/commission-payments/summary',
     { staleTime: STALE_TIMES.FREQUENT }

@@ -10,27 +10,12 @@ describe('useDateFilter', () => {
     expect(result.current.end).toBe('');
   });
 
-  it('retorna query vazia para "all"', () => {
-    const { result } = renderHook(() => useDateFilter('all'));
-    expect(result.current.query).toBe('');
-  });
-
   it('retorna período de 7 dias para "7d"', () => {
     const { result } = renderHook(() => useDateFilter('7d'));
     expect(result.current.query).toContain('startDate=');
     expect(result.current.query).toContain('endDate=');
     expect(result.current.start).toBeTruthy();
     expect(result.current.end).toBeTruthy();
-  });
-
-  it('retorna período de 7 dias para "LAST_7_DAYS"', () => {
-    const { result } = renderHook(() => useDateFilter('LAST_7_DAYS'));
-    expect(result.current.query).toContain('startDate=');
-  });
-
-  it('retorna período de 7 dias para "last_7"', () => {
-    const { result } = renderHook(() => useDateFilter('last_7'));
-    expect(result.current.query).toContain('startDate=');
   });
 
   it('retorna período de 30 dias para "30d"', () => {
@@ -44,25 +29,14 @@ describe('useDateFilter', () => {
     expect(result.current.start).toContain('-01');
   });
 
-  it('retorna mês atual para "THIS_MONTH"', () => {
-    const { result } = renderHook(() => useDateFilter('THIS_MONTH'));
-    expect(result.current.query).toContain('startDate=');
-    expect(result.current.start).toContain('-01');
-  });
-
   it('retorna mês passado para "mes_passado"', () => {
     const { result } = renderHook(() => useDateFilter('mes_passado'));
     expect(result.current.query).toContain('startDate=');
     expect(result.current.query).toContain('endDate=');
   });
 
-  it('retorna mês passado para "LAST_MONTH"', () => {
-    const { result } = renderHook(() => useDateFilter('LAST_MONTH'));
-    expect(result.current.query).toContain('startDate=');
-  });
-
-  it('retorna hoje para "TODAY"', () => {
-    const { result } = renderHook(() => useDateFilter('TODAY'));
+  it('retorna hoje para "today"', () => {
+    const { result } = renderHook(() => useDateFilter('today'));
     expect(result.current.start).toBe(result.current.end);
   });
 
@@ -70,11 +44,6 @@ describe('useDateFilter', () => {
     const { result } = renderHook(() => useDateFilter('personalizado', '2026-01-01', '2026-01-31'));
     expect(result.current.query).toContain('startDate=2026-01-01');
     expect(result.current.query).toContain('endDate=2026-01-31');
-  });
-
-  it('retorna período de 30 dias para "last_30"', () => {
-    const { result } = renderHook(() => useDateFilter('last_30'));
-    expect(result.current.query).toContain('startDate=');
   });
 
   it('não quebra com período inválido', () => {

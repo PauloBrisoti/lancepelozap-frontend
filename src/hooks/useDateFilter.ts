@@ -1,10 +1,15 @@
 import { useMemo } from 'react';
 import { subDays, format, subMonths } from 'date-fns';
 
-type DatePeriod =
-  | '7d' | '30d' | 'este_mes' | 'mes_passado' | 'personalizado' | 'tudo'
-  | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM'
-  | 'all' | 'today' | 'last_7' | 'last_30' | 'this_month' | 'last_month' | 'custom';
+/** Períodos de filtro canônicos (snake_case PT-BR). */
+export type DatePeriod =
+  | 'today'
+  | '7d'
+  | '30d'
+  | 'este_mes'
+  | 'mes_passado'
+  | 'personalizado'
+  | 'tudo';
 
 interface DateFilterResult {
   start: string;
@@ -38,26 +43,26 @@ export function useDateFilter(
     let start = '';
     let end = format(today, 'yyyy-MM-dd');
 
-    if (period === 'today' || period === 'TODAY') {
+    if (period === 'today') {
       start = format(today, 'yyyy-MM-dd');
       end = format(today, 'yyyy-MM-dd');
-    } else if (period === 'last_7' || period === 'LAST_7_DAYS' || period === '7d') {
+    } else if (period === '7d') {
       start = format(subDays(today, 7), 'yyyy-MM-dd');
-    } else if (period === 'last_30' || period === '30d') {
+    } else if (period === '30d') {
       start = format(subDays(today, 30), 'yyyy-MM-dd');
-    } else if (period === 'this_month' || period === 'THIS_MONTH' || period === 'este_mes') {
+    } else if (period === 'este_mes') {
       const range = fiscalMonthRange(today, diaInicioMes);
       start = format(range.start, 'yyyy-MM-dd');
       end = format(range.end, 'yyyy-MM-dd');
-    } else if (period === 'last_month' || period === 'LAST_MONTH' || period === 'mes_passado') {
+    } else if (period === 'mes_passado') {
       const lastMonth = subMonths(today, 1);
       const range = fiscalMonthRange(lastMonth, diaInicioMes);
       start = format(range.start, 'yyyy-MM-dd');
       end = format(range.end, 'yyyy-MM-dd');
-    } else if ((period === 'custom' || period === 'CUSTOM' || period === 'personalizado') && customStart && customEnd) {
+    } else if (period === 'personalizado' && customStart && customEnd) {
       start = customStart;
       end = customEnd;
-    } else if (period === 'all' || period === 'tudo') {
+    } else if (period === 'tudo') {
       start = '';
       end = '';
     }

@@ -25,7 +25,7 @@ export function BiPage() {
     topflop: `/bi/top-flop?dataInicio=${periodo1.inicio}&dataFim=${periodo1.fim}`,
   };
 
-  const { data, isLoading, refetch } = useApiQuery<unknown>(
+  const { data, isLoading, refetch } = useApiQuery<BiData>(
     ['bi', activeTab, periodo1.inicio, periodo1.fim, periodo2.inicio, periodo2.fim],
     endpoints[activeTab],
     { staleTime: STALE_TIMES.FREQUENT }
@@ -56,16 +56,45 @@ export function BiPage() {
         <div className="text-center text-gray-400 py-20">Carregando...</div>
       ) : (
         <>
-          {activeTab === 'comparativo' && <ComparativoTab data={data as { periodo1: ComparativoData; periodo2: ComparativoData } | null} periodo1={periodo1} periodo2={periodo2} setPeriodo1={setPeriodo1} setPeriodo2={setPeriodo2} onRecarregar={() => refetch()} />}
-          {activeTab === 'abc' && <AbcTab data={data as { resumo: { a: number; b: number; c: number; receitaA: number; receitaB: number; receitaC: number }; totalReceita: number; produtos: AbcProduto[] } | null} />}
-          {activeTab === 'rentabilidade' && <RentabilidadeTab data={data as { total: { receita: number; custo: number; margem: number }; categorias: RentabilidadeCategoria[] } | null} />}
-          {activeTab === 'heatmap' && <HeatmapTab data={data as { porHora: HeatmapHora[]; porDiaSemana: HeatmapItem[]; porDiaMes: { dia: string; vendas: number }[] } | null} />}
-          {activeTab === 'topflop' && <TopFlopTab data={data as { top: TopFlopItem[]; flop: TopFlopItem[] } | null} />}
+          {activeTab === 'comparativo' && <ComparativoTab data={data as BiComparativo | null} periodo1={periodo1} periodo2={periodo2} setPeriodo1={setPeriodo1} setPeriodo2={setPeriodo2} onRecarregar={() => refetch()} />}
+          {activeTab === 'abc' && <AbcTab data={data as BiAbc | null} />}
+          {activeTab === 'rentabilidade' && <RentabilidadeTab data={data as BiRentabilidade | null} />}
+          {activeTab === 'heatmap' && <HeatmapTab data={data as BiHeatmap | null} />}
+          {activeTab === 'topflop' && <TopFlopTab data={data as BiTopFlop | null} />}
         </>
       )}
     </div>
   );
 }
+
+interface BiComparativo {
+  periodo1: ComparativoData;
+  periodo2: ComparativoData;
+}
+
+interface BiAbc {
+  resumo: { a: number; b: number; c: number; receitaA: number; receitaB: number; receitaC: number };
+  totalReceita: number;
+  produtos: AbcProduto[];
+}
+
+interface BiRentabilidade {
+  total: { receita: number; custo: number; margem: number };
+  categorias: RentabilidadeCategoria[];
+}
+
+interface BiHeatmap {
+  porHora: HeatmapHora[];
+  porDiaSemana: HeatmapItem[];
+  porDiaMes: { dia: string; vendas: number }[];
+}
+
+interface BiTopFlop {
+  top: TopFlopItem[];
+  flop: TopFlopItem[];
+}
+
+type BiData = BiComparativo | BiAbc | BiRentabilidade | BiHeatmap | BiTopFlop;
 
 /* ===== COMPARATIVO ===== */
 interface ComparativoData {

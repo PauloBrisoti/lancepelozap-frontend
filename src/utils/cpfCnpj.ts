@@ -38,6 +38,7 @@ function isValidCNPJ(cnpj: string): boolean {
   return calc(base2) === parseInt(digits[13]);
 }
 
+/** Valida CPF (11 dígitos) ou CNPJ (14 dígitos). */
 export function isValidCPFOrCNPJ(value: string): boolean {
   const digits = value.replace(/\D/g, '');
   if (digits.length === 11) return isValidCPF(value);
@@ -45,4 +46,39 @@ export function isValidCPFOrCNPJ(value: string): boolean {
   return false;
 }
 
+/** Máscara progressiva: CPF 000.000.000-00 ou CNPJ 00.000.000/0000-00. */
+export function maskCpfCnpj(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+}
 
+/** Valida e retorna mensagem de erro, ou null se válido/vazio. */
+export function validarCpfCnpj(doc: string): string | null {
+  const digits = doc.replace(/\D/g, '');
+  if (digits.length === 0) return null;
+  if (digits.length === 11) return isValidCPF(doc) ? null : 'CPF inválido';
+  if (digits.length === 14) return isValidCNPJ(doc) ? null : 'CNPJ inválido';
+  return 'CNPJ/CPF deve ter 11 (CPF) ou 14 (CNPJ) dígitos';
+}
+
+/** Formata para exibição, preservando valores não-CPF/CNPJ (ex.: "-"). */
+export function formatDoc(doc: string | null | undefined): string {
+  const digits = (doc || '').replace(/\D/g, '');
+  if (digits.length === 11) {
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  }
+  if (digits.length === 14) {
+    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  }
+  return doc || '-';
+}

@@ -80,7 +80,7 @@ export function PermissoesAdminPage() {
   const loadClients = async () => {
     try {
       const res = await fetchApi('/super-admin/clients');
-      setClients(res.map((c: any) => ({ id: c.id, nomeCompleto: c.nomeCompleto })));
+      setClients(res.map((c: { id: string; nomeCompleto: string }) => ({ id: c.id, nomeCompleto: c.nomeCompleto })));
     } catch (error) {
       console.error('Erro ao carregar clientes', error);
     }

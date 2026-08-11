@@ -41,6 +41,11 @@ const toDT = (dateStr: string) => {
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toISOString();
 };
 
+interface PersonalDashboard {
+  saldoAcumulado: number;
+  saldosAcumuladosPorConta: { id: string; nome: string; saldo: number }[];
+}
+
 export function FinanceiroPF() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('TODOS');
@@ -70,7 +75,7 @@ export function FinanceiroPF() {
     `/personal/transactions?mes=${filterMes}&ano=${filterAno}`,
     { staleTime: STALE_TIMES.FREQUENT }
   );
-  const { data: dash } = useApiQuery<any>(
+  const { data: dash } = useApiQuery<PersonalDashboard>(
     ['personal', 'dashboard', filterMes, filterAno],
     `/personal/dashboard?mes=${filterMes}&ano=${filterAno}`,
     { staleTime: STALE_TIMES.FREQUENT }

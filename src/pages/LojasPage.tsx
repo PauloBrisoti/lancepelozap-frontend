@@ -2,7 +2,7 @@ import toast from 'react-hot-toast';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
-import { maskCpfCnpj, validarCpfCnpj } from '../lib/validators';
+import { maskCpfCnpj, validarCpfCnpj, formatDoc } from '../utils/cpfCnpj';
 import type { Subscription } from '../types/api';
 import { formatDateBR, formatDateTimeBR } from '../lib/dates';
 import { formatBRL } from '../utils/format';
@@ -53,15 +53,11 @@ interface ClientData {
 
 const PAGE_SIZE = 10;
 
-function formatDoc(doc: string | null | undefined): string {
-  const digits = (doc || '').replace(/\D/g, '');
-  if (digits.length === 11) {
-    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  }
-  if (digits.length === 14) {
-    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  }
-  return doc || '-';
+interface ImpersonationLog {
+  id: string;
+  impersonatorName: string;
+  impersonatorEmail: string;
+  createdAt: string;
 }
 
 function relativeDate(iso: string): string {
@@ -109,10 +105,25 @@ function moduleLabel(control: Control): string {
   return control.tipo === 'PF' ? 'Finanças Pessoais' : 'Varejo e Estoque';
 }
 
+interface PlanData {
+  id: string;
+  nome: string;
+  precoMensal: number | string;
+}
+
+interface ClientUser {
+  id: string;
+  nome: string;
+  email: string;
+  clientRole?: string;
+  role?: string;
+  ativo: boolean;
+}
+
 export function LojasPage() {
   const { user, impersonate } = useAuth();
   const [clients, setClients] = useState<ClientData[]>([]);
-  const [plans, setPlans] = useState<any[]>([]);
+  const [plans, setPlans] = useState<PlanData[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Modal State
@@ -165,7 +176,7 @@ export function LojasPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [hideDemo, setHideDemo] = useState(false);
   const [logsModalStore, setLogsModalStore] = useState<{ storeId: string; storeName: string } | null>(null);
-  const [impersonationLogs, setImpersonationLogs] = useState<any[]>([]);
+  const [impersonationLogs, setImpersonationLogs] = useState<ImpersonationLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<'nome' | 'cadastro' | 'status'>('cadastro');
@@ -267,7 +278,7 @@ export function LojasPage() {
     { key: 'multiplos_vendedores', label: 'Múltiplos Vendedores' },
     { key: 'financas_pessoais', label: 'Finanças Pessoais' },
   ];
-  const [clientUsers, setClientUsers] = useState<any[]>([]);
+  const [clientUsers, setClientUsers] = useState<ClientUser[]>([]);
   const [selectedClientForEquipe, setSelectedClientForEquipe] = useState<ClientData | null>(null);
 
   const abrirModalEquipe = async (client: ClientData) => {
@@ -792,7 +803,7 @@ export function LojasPage() {
       </div>
 
       {/* Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="xl" rounded="xl" className="flex flex-col">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="xl" rounded="xl" padded={false} className="flex flex-col">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
               <h2 className="text-xl font-bold text-gray-800">{isEditing ? 'Editar Cliente' : 'Novo Cliente'}</h2>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
@@ -1104,7 +1115,7 @@ export function LojasPage() {
 
       {/* Modal de Histórico de Acessos (God Mode) */}
       {logsModalStore && (
-        <Modal open={!!logsModalStore} onClose={() => setLogsModalStore(null)} size="md" rounded="xl">
+        <Modal open={!!logsModalStore} onClose={() => setLogsModalStore(null)} size="md" rounded="xl" padded={false} className="overflow-hidden">
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-800">
                 Acessos em God Mode: {logsModalStore?.storeName}
@@ -1149,7 +1160,7 @@ export function LojasPage() {
 
       {/* Modal de Equipe Global */}
       {equipeModalAberto && selectedClientForEquipe && (
-        <Modal open={!!(equipeModalAberto && selectedClientForEquipe)} onClose={() => setEquipeModalAberto(false)} size="md" rounded="xl">
+        <Modal open={!!(equipeModalAberto && selectedClientForEquipe)} onClose={() => setEquipeModalAberto(false)} size="md" rounded="xl" padded={false} className="overflow-hidden">
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-800">
                 Acessos: {selectedClientForEquipe?.nomeCompleto}

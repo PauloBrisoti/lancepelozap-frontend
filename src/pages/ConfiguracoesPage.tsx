@@ -695,7 +695,7 @@ export function ConfiguracoesPage() {
 
       {/* MODAL USUÁRIO */}
       {modalUserAberto && (
-        <Modal open={modalUserAberto} onClose={() => setModalUserAberto(false)} size="sm" rounded="xl" className="overflow-hidden">
+        <Modal open={modalUserAberto} onClose={() => setModalUserAberto(false)} size="sm" rounded="xl" padded={false} className="overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{userForm.id ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
               <button onClick={() => setModalUserAberto(false)} className="text-gray-400 hover:text-gray-600">
@@ -808,7 +808,7 @@ export function ConfiguracoesPage() {
 
       {/* MODAL CONFIRMAR ZERAR FATURAMENTO */}
       {resetModalAberto && (
-        <Modal open={resetModalAberto} onClose={() => setResetModalAberto(false)} size="sm" rounded="xl" className="overflow-hidden">
+        <Modal open={resetModalAberto} onClose={() => setResetModalAberto(false)} size="sm" rounded="xl" padded={false} className="overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50">
               <h3 className="text-lg font-bold text-red-800">⚠️ Zerar Faturamento</h3>
               <button onClick={() => setResetModalAberto(false)} className="text-red-500 hover:text-red-700">✕</button>
@@ -944,7 +944,7 @@ function PaymentFeesSection() {
       )}
 
       {modalOpen && (
-        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl">
+        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl" padded={false}>
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{editing ? 'Editar Taxa' : 'Nova Taxa'}</h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -1116,7 +1116,7 @@ function CommissionSection() {
       )}
 
       {modalOpen && (
-        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl">
+        <Modal open={modalOpen} onClose={closeModal} size="sm" rounded="xl" padded={false}>
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900">{editing ? 'Editar Comissão' : 'Nova Comissão'}</h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">✕</button>

@@ -41,6 +41,16 @@ interface StoreMetric {
   prevSaidas?: number;
 }
 
+interface SellerPerformance {
+  userId: string;
+  nome: string;
+  totalVendas: number;
+  valorVendido: number;
+  ticketMedio: number;
+  comissaoPendente: number;
+  comissaoPagaMes: number;
+}
+
 interface ConsolidatedData {
   totalStores: number;
   stores: StoreMetric[];
@@ -93,7 +103,7 @@ export function DashboardPJPage() {
     `/dashboard/pj/consolidated${queryStr}`,
     { enabled, staleTime: STALE_TIMES.FREQUENT }
   );
-  const { data: sellerPerf } = useApiQuery<{ sellers: any[] }>(
+  const { data: sellerPerf, isError: sellerError, refetch: refetchSellers } = useApiQuery<{ sellers: SellerPerformance[] }>(
     ['dashboard-pj', 'seller-performance', activeStoreId, period, customStart, customEnd],
     `/dashboard/pj/seller-performance${queryStr}`,
     { enabled, staleTime: STALE_TIMES.FREQUENT }
@@ -445,7 +455,12 @@ export function DashboardPJPage() {
       </div>
 
       <h2 className="text-lg font-bold text-gray-800 mb-4">Performance por Vendedor</h2>
-      {sellers.length === 0 ? (
+      {sellerError ? (
+        <div className="bg-white rounded-xl border border-red-200 py-6 px-4 text-center">
+          <p className="text-red-500 text-sm">Erro ao carregar a performance por vendedor.</p>
+          <button onClick={() => refetchSellers()} className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700">Tentar novamente</button>
+        </div>
+      ) : sellers.length === 0 ? (
         <p className="text-gray-400 text-sm py-6 text-center bg-white rounded-xl border border-gray-200">Nenhuma venda no período</p>
       ) : (
       <div className="overflow-x-auto">
