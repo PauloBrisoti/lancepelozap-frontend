@@ -1,73 +1,49 @@
-# React + TypeScript + Vite
+# 💻 Lance Pelo Zap — Frontend Web Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface web moderna, responsiva e de alta performance desenvolvida para a plataforma SaaS de controle financeiro e gestão operacional **Lance Pelo Zap**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🛠️ Stack Tecnológica & Arquitetura
 
-## React Compiler
+* **Framework & Bundler:** React 18, Vite
+* **Linguagem:** TypeScript (Tipagem estrita em componentes, formulários e fluxos da API)
+* **Estilização & UI:** TailwindCSS, PostCSS, Lucide Icons
+* **Roteamento & Estado:** React Router DOM, Custom Hooks modulares
+* **Testes & Qualidade:** Vitest, Testing Library, ESLint flat config
+* **Deploy & Web Server:** Nginx (SPA routing fallback e otimização de assets estáticos), Docker
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 📊 Módulos e Funcionalidades
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+* **Painéis Financeiros & DRE em Tempo Real:**
+  * Dashboards interativos para acompanhamento de Receita Bruta, Receita Líquida, CMV e Margens.
+  * Visualização de fluxo de caixa projetado, conciliação multiformas e controle de inadimplência.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+* **Frente de Caixa & Operações Rápidas:**
+  * Interface para rascunhos de venda (`useSaleDraft`), orçamentos e emissão simplificada.
+  * Gestão de configurações multiloja (`useStoreConfig`) e controle de acessos de operadores.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+* **Experiência do Usuário (UX/UI):**
+  * Design system responsivo com suporte a estados de carregamento, validações em tempo real e prevenção de erros em transações financeiras.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Como Executar o Projeto Localmente
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Pré-requisitos
+* Node.js 18+
+* npm, pnpm ou yarn
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Instalação e Execução
+\`\`\`bash
+# Clonar o repositório
+git clone git@github.com:PauloBrisoti/lancepelozap-frontend.git
+
+# Instalar as dependências
+npm install
+
+# Iniciar o servidor de desenvolvimento
+npm run dev
+\`\`\`
