@@ -5,8 +5,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import type { Sale, Product, Receivable, FinancialTransaction, SaleItem, DashboardMetrics } from '../types/api';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, queryKeys, STALE_TIMES } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
 import { formatBRL } from '../utils/format';
+import { saldoRestante } from '../utils/financeiro';
 import { REPORT_PAYMENT_LABELS } from '../utils/domainMaps';
 
 type Tab = 'vendas' | 'financeiro' | 'estoque';
@@ -60,6 +62,7 @@ function renderPieLabel(props: unknown) {
 }
 
 export function RelatoriosPage() {
+  const { activeStoreId } = useAuthStore();
   const [tab, setTab] = useState<Tab>('vendas');
   const today = new Date();
   const [period, setPeriod] = useState('30d');
@@ -104,7 +107,7 @@ export function RelatoriosPage() {
     { enabled: tab === 'financeiro', staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
   );
   const { data: receivables = [] } = useApiQuery<Receivable[]>(
-    ['reports', 'receivables', appliedStart, appliedEnd],
+    queryKeys.receivables(activeStoreId),
     '/finance/receivables',
     { enabled: tab === 'financeiro', staleTime: STALE_TIMES.FREQUENT, placeholderData: (prevData) => prevData }
   );
@@ -304,7 +307,7 @@ export function RelatoriosPage() {
           cliente: r.customer?.nomeCompleto || '-',
           venc: format(new Date(r.dataVencimento), 'dd/MM/yyyy'),
           status: r.statusExibicao || r.status,
-          saldo: Number(r.saldoRestante ?? (Number(r.valorParcela) - Number(r.valorJaPago || 0))),
+          saldo: Number(saldoRestante(r)),
         });
       });
     }
@@ -661,9 +664,9 @@ export function RelatoriosPage() {
                 <div className="space-y-2">
                   {(() => {
                     const pendentes = receivables.filter((r: Receivable) => (r.statusExibicao || r.status) !== 'PAGO');
-                    const totalPendente = pendentes.reduce((acc: number, r: Receivable) => acc + (r.saldoRestante ?? (Number(r.valorParcela) - Number(r.valorJaPago || 0))), 0);
+                    const totalPendente = pendentes.reduce((acc: number, r: Receivable) => acc + saldoRestante(r), 0);
                     const vencidos = pendentes.filter((r: Receivable) => (r.statusExibicao || r.status) === 'VENCIDO');
-                    const totalVencido = vencidos.reduce((acc: number, r: Receivable) => acc + (r.saldoRestante ?? (Number(r.valorParcela) - Number(r.valorJaPago || 0))), 0);
+                    const totalVencido = vencidos.reduce((acc: number, r: Receivable) => acc + saldoRestante(r), 0);
                     return (
                       <>
                         <div className="flex justify-between text-sm"><span className="text-gray-600">Total a Receber</span><span className="font-bold">{formatBRL(totalPendente)}</span></div>

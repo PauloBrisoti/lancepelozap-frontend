@@ -8,7 +8,7 @@ vi.mock('../lib/api', () => ({
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { role: 'SUPER_ADMIN' } }),
+  useAuthUser: () => ({ user: { role: 'SUPER_ADMIN' } }),
 }));
 
 const base = (overrides: Partial<any> = {}) => ({

@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
 import { maskCpfCnpj, validarCpfCnpj, formatDoc } from '../utils/cpfCnpj';
 import type { Subscription } from '../types/api';
@@ -121,7 +121,8 @@ interface ClientUser {
 }
 
 export function LojasPage() {
-  const { user, impersonate } = useAuth();
+  const { user } = useAuthUser();
+  const { impersonate } = useAuthActions();
   const [clients, setClients] = useState<ClientData[]>([]);
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -250,6 +251,9 @@ export function LojasPage() {
   const pageCount = Math.max(1, Math.ceil(sortedClients.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageClients = sortedClients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const currentClientStores = clients.find(c => c.id === formData.id)?.controls?.flatMap(c => c.stores ?? []) ?? [];
+  const selectedStore = currentClientStores.find(s => s.id === formFeaturesStoreId) ?? null;
 
   const ALL_FEATURES: { key: string; label: string }[] = [
     { key: 'pdv', label: 'Nova Venda (PDV)' },
@@ -433,6 +437,20 @@ export function LojasPage() {
     setModalOpen(true);
   };
 
+  const loadFeatures = async (storeId: string) => {
+    try {
+      const storeData = await fetchApi('/super-admin/stores/' + storeId + '/features');
+      if (storeData.features && Object.keys(storeData.features).length > 0) {
+        setFormFeatures(storeData.features);
+      } else {
+        // Sem features configuradas: assume todos os módulos habilitados
+        setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
+      }
+    } catch {
+      setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
+    }
+  };
+
   const openEditModal = async (client: ClientData) => {
     const sub = client.subscriptions?.[0];
     const firstCtrl = client.controls?.[0];
@@ -471,17 +489,7 @@ export function LojasPage() {
     const firstStore = firstCtrl?.stores?.[0];
     if (firstStore?.id) {
       setFormFeaturesStoreId(firstStore.id);
-      try {
-        const storeData = await fetchApi('/super-admin/stores/' + firstStore.id + '/features');
-        if (storeData.features && Object.keys(storeData.features).length > 0) {
-          setFormFeatures(storeData.features);
-        } else {
-          // Sem features configuradas: assume todos os módulos habilitados
-          setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
-        }
-      } catch {
-        setFormFeatures(Object.fromEntries(ALL_FEATURES.map(f => [f.key, true])));
-      }
+      await loadFeatures(firstStore.id);
     }
   };
 
@@ -1059,8 +1067,29 @@ export function LojasPage() {
                           </div>
                         ))}
 
-                        <h4 className="font-semibold text-gray-800 border-t pt-4 mt-4">Features (Ativar/Desativar)</h4>
-                        <p className="text-sm text-gray-500 mb-3">Liga/desliga módulos para esta empresa. As alterações refletem no menu lateral imediatamente.</p>
+                        <h4 className="font-semibold text-gray-800 border-t pt-4 mt-4">
+                          Features (Ativar/Desativar)
+                          {selectedStore && <span className="text-sm font-normal text-gray-500"> — {selectedStore.nomeFantasia}</span>}
+                        </h4>
+                        {currentClientStores.length > 0 && (
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Loja</label>
+                            <select
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                              value={formFeaturesStoreId ?? ''}
+                              onChange={async (e) => {
+                                const storeId = e.target.value;
+                                setFormFeaturesStoreId(storeId);
+                                if (storeId) await loadFeatures(storeId);
+                              }}
+                            >
+                              {currentClientStores.map(s => (
+                                <option key={s.id} value={s.id}>{s.nomeFantasia || s.id}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <p className="text-sm text-gray-500 mb-3">Liga/desliga módulos para a loja selecionada. As alterações refletem no menu lateral imediatamente.</p>
                         <div className="grid grid-cols-2 gap-2">
                           {ALL_FEATURES.map(f => (
                             <label key={f.key} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">

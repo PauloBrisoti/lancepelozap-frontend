@@ -2,7 +2,7 @@ import { useState, Fragment } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
 import { formatBRL } from '../utils/format';
 
@@ -39,7 +39,7 @@ interface Payment {
 }
 
 export function ComissoesPage() {
-  const { isRestrictedRole } = useAuth();
+  const { isRestrictedRole } = useAuthUser();
   // VENDEDOR/CAIXA vê apenas as próprias comissões (sem pagar, sem ver outros vendedores)
 
   const [paying, setPaying] = useState<string | null>(null);

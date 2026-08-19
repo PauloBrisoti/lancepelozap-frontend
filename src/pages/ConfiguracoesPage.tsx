@@ -1,8 +1,9 @@
 import toast from 'react-hot-toast';
 import { PAYMENT_METHOD_LABELS } from '../utils/domainMaps';
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthStore } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
+import { queryKeys } from '../lib/query';
 import { Modal } from '../components/Modal';
 import { useCrudList } from '../hooks/useCrudList';
 
@@ -27,7 +28,7 @@ interface User {
 }
 
 export function ConfiguracoesPage() {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const [activeTab, setActiveTab] = useState<'perfil' | 'loja' | 'equipe' | 'seguranca' | 'taxas' | 'comissoes'>('perfil');
   const [loading, setLoading] = useState(true);
   const [resetModalAberto, setResetModalAberto] = useState(false);
@@ -871,12 +872,13 @@ interface PaymentFeeForm {
 
 
 function PaymentFeesSection() {
+  const { activeStoreId } = useAuthStore();
   const {
     items: fees, loading, saving, modalOpen, editing, form, setForm,
     openNew, openEdit, closeModal, handleSave, handleDelete,
   } = useCrudList<PaymentFee, PaymentFeeForm>({
     endpoint: '/payment-fees',
-    loadList: () => fetchApi('/payment-fees'),
+    queryKey: queryKeys.paymentFees(activeStoreId),
     createDefault: () => ({ formaPagamento: 'PIX', parcelas: 1, taxaPercentual: 0, taxaFixa: 0, prazoRecebimento: 0 }),
     toForm: (fee) => ({
       formaPagamento: fee.formaPagamento,

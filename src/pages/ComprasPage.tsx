@@ -7,7 +7,7 @@ import { Modal } from '../components/Modal';
 import { useModal } from '../hooks/useModal';
 import { Pagination } from '../components/Pagination';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../context/AuthContext';
 import { formatBRL } from '../utils/format';
 import { PURCHASE_STATUS_LABELS, PURCHASE_STATUS_COLORS } from '../utils/domainMaps';
 
@@ -37,7 +37,7 @@ interface OrderFormState {
 }
 
 export function ComprasPage() {
-  const { activeStoreId } = useAuth();
+  const { activeStoreId } = useAuthStore();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
       const [receiveOrder, setReceiveOrder] = useState<any>(null);

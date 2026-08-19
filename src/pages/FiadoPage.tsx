@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarCheck, DollarSign, Search, User, Wallet, Inbox }
 import { SkeletonTable } from '../components/LoadingSkeleton';
 import { Modal } from '../components/Modal';
 import { formatBRL, formatNome } from '../utils/format';
+import { saldoRestante } from '../utils/financeiro';
 import { useFiado, deriveReceivable } from '../hooks/useFiado';
 import type { Receivable } from '../types/api';
 
@@ -226,7 +227,7 @@ export function FiadoPage() {
               </div>
               <div className="p-3 bg-amber-50 rounded-xl">
                 <p className="text-xs text-amber-600 font-bold uppercase tracking-wider">Saldo devedor da parcela</p>
-                <p className="font-semibold text-amber-800 mt-0.5">{formatBRL(renegModal.saldoRestante ?? Number(renegModal.valorParcela))}</p>
+                <p className="font-semibold text-amber-800 mt-0.5">{formatBRL(saldoRestante(renegModal))}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Novo Valor Total</label>

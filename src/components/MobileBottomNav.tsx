@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { isPathActive } from '../utils/navigation';
 import { IconHomeSm, IconShoppingBagSm, IconVendasSm, IconFinanceSm, IconClientsSm, IconMenuSm } from './icons';
 
@@ -13,7 +13,7 @@ interface NavTab {
 export const MobileBottomNav = React.memo(function MobileBottomNav({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, activeWorkspace, canAccess } = useAuth();
+  const { user, activeWorkspace, canAccess } = useAuthUser();
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' && !user?.isImpersonating;
   const isPf = activeWorkspace?.tipo === 'PF';

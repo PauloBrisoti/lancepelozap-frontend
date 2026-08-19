@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
 import { Plus, Trash2, Edit3, Check, X } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useAuthStore } from '../context/AuthContext';
 import { useCrudList } from '../hooks/useCrudList';
+import { queryKeys } from '../lib/query';
+import { useStoreConfig, ALL_DASHBOARD_CARDS } from '../hooks/useStoreConfig';
 
 interface FeeConfig {
   id: string;
@@ -40,32 +39,14 @@ const PRAZOS = [
   { value: 60, label: 'D+60' },
 ];
 
-const ALL_DASHBOARD_CARDS = [
-  { key: 'faturamento_bruto', label: 'Faturamento Bruto', desc: 'Total de vendas do período' },
-  { key: 'dinheiro_recebido', label: 'Dinheiro Recebido', desc: 'Entradas financeiras no caixa' },
-  { key: 'fiado_a_receber', label: 'Fiado a Receber', desc: 'Vendas fiado pendentes' },
-  { key: 'contas_a_receber', label: 'Contas a Receber', desc: 'Total a receber (fiado + avulsas)' },
-  { key: 'contas_a_pagar', label: 'Contas a Pagar', desc: 'Boletos e contas pendentes' },
-  { key: 'caixa_disponivel', label: 'Caixa Disponível', desc: 'Saldo total em carteiras' },
-  { key: 'lucro_operacao', label: 'Lucro da Operação', desc: 'Faturamento - CMV - Despesas' },
-  { key: 'estoque_atual', label: 'Estoque Atual', desc: 'Custo dos produtos em estoque' },
-  { key: 'despesas_operacionais', label: 'Despesas Operacionais', desc: 'Custos operacionais do mês' },
-  { key: 'saldos_carteira', label: 'Saldos por Carteira', desc: 'Saldo individual de cada carteira' },
-];
-
 function ConfigCardMachinePage() {
-  const { activeStoreId } = useAuth();
-  const [cartaoImediato, setCartaoImediato] = useState(true);
-  const [savingCardBehavior, setSavingCardBehavior] = useState(false);
-  const [diaInicioMes, setDiaInicioMes] = useState(1);
-  const [savingDiaInicioMes, setSavingDiaInicioMes] = useState(false);
-  const [dashboardCards, setDashboardCards] = useState<string[]>(ALL_DASHBOARD_CARDS.map(c => c.key));
-  const [savingDashboardCards, setSavingDashboardCards] = useState(false);
-  const [storeConfigLoading, setStoreConfigLoading] = useState(true);
+  const { activeStoreId } = useAuthStore();
+  const cfg = useStoreConfig(activeStoreId);
+  const { cartaoImediato, diaInicioMes, dashboardCards, setDiaInicioMes, setDashboardCards, savingField, loading: storeConfigLoading, saveCardBehavior, saveDiaInicioMes, saveDashboardCards } = cfg;
 
   const fees = useCrudList<FeeConfig, FeeForm>({
     endpoint: '/payment-fees',
-    loadList: () => fetchApi('/payment-fees'),
+    queryKey: queryKeys.paymentFees(activeStoreId),
     createDefault: () => ({ formaPagamento: 'CARTAO_CREDITO', parcelas: 1, taxaPercentual: '', taxaFixa: '', prazoRecebimento: 30 }),
     toForm: fee => ({
       formaPagamento: fee.formaPagamento,
@@ -95,88 +76,6 @@ function ConfigCardMachinePage() {
       saveError: 'Erro ao salvar',
     },
   });
-
-  const getStoreId = async (): Promise<string | null> => {
-    const stores: any[] = await fetchApi('/store/my');
-    return stores[0]?.stores?.[0]?.id ?? null;
-  };
-
-  const carregarStoreConfig = async () => {
-    const stores: any[] = await fetchApi('/store/my');
-    const store = stores[0]?.stores?.[0];
-    if (!store) return;
-    setCartaoImediato(store.cartaoImediato ?? true);
-    setDiaInicioMes(store.diaInicioMes ?? 1);
-    const dashCfg = await fetchApi(`/store/my/${store.id}/dashboard-config`).catch(() => null) as { cards?: string[] } | null;
-    if (dashCfg?.cards) {
-      setDashboardCards(dashCfg.cards);
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      setStoreConfigLoading(true);
-      try {
-        await carregarStoreConfig();
-      } catch {
-        toast.error('Erro ao carregar configurações');
-      } finally {
-        setStoreConfigLoading(false);
-      }
-    })();
-  }, [activeStoreId]);
-
-  const saveCardBehavior = async () => {
-    setSavingCardBehavior(true);
-    try {
-      const storeId = await getStoreId();
-      if (!storeId) { toast.error('Loja não encontrada'); return; }
-      await fetchApi(`/store/my/${storeId}/card-behavior`, {
-        method: 'PATCH',
-        body: JSON.stringify({ cartaoImediato: !cartaoImediato })
-      });
-      setCartaoImediato(!cartaoImediato);
-      toast.success('Configuração salva');
-    } catch {
-      toast.error('Erro ao salvar');
-    } finally {
-      setSavingCardBehavior(false);
-    }
-  };
-
-  const saveDiaInicioMes = async () => {
-    setSavingDiaInicioMes(true);
-    try {
-      const storeId = await getStoreId();
-      if (!storeId) { toast.error('Loja não encontrada'); return; }
-      await fetchApi(`/store/my/${storeId}/fiscal-config`, {
-        method: 'PATCH',
-        body: JSON.stringify({ diaInicioMes })
-      });
-      toast.success('Dia de início do mês salvo!');
-    } catch {
-      toast.error('Erro ao salvar');
-    } finally {
-      setSavingDiaInicioMes(false);
-    }
-  };
-
-  const saveDashboardCards = async () => {
-    setSavingDashboardCards(true);
-    try {
-      const storeId = await getStoreId();
-      if (!storeId) { toast.error('Loja não encontrada'); return; }
-      await fetchApi(`/store/my/${storeId}/dashboard-config`, {
-        method: 'PATCH',
-        body: JSON.stringify({ cards: dashboardCards })
-      });
-      toast.success('Configuração do painel salva!');
-    } catch {
-      toast.error('Erro ao salvar');
-    } finally {
-      setSavingDashboardCards(false);
-    }
-  };
 
   const pmLabel = (v: string) => FORMAS_PAGAMENTO.find(f => f.value === v)?.label || v;
   const prazoLabel = (v: number) => PRAZOS.find(p => p.value === v)?.label || `D+${v}`;
@@ -301,7 +200,7 @@ function ConfigCardMachinePage() {
           </div>
           <button
             onClick={saveCardBehavior}
-            disabled={savingCardBehavior}
+            disabled={savingField === 'cartao'}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${cartaoImediato ? 'bg-brand-600' : 'bg-gray-300'}`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${cartaoImediato ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -336,10 +235,10 @@ function ConfigCardMachinePage() {
             />
             <button
               onClick={saveDiaInicioMes}
-              disabled={savingDiaInicioMes}
+              disabled={savingField === 'mes'}
               className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
             >
-              {savingDiaInicioMes ? 'Salvando...' : 'Salvar'}
+              {savingField === 'mes' ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </div>
@@ -373,10 +272,10 @@ function ConfigCardMachinePage() {
         </div>
         <button
           onClick={saveDashboardCards}
-          disabled={savingDashboardCards}
+          disabled={savingField === 'cards'}
           className="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
         >
-          {savingDashboardCards ? 'Salvando...' : 'Salvar Configuração'}
+          {savingField === 'cards' ? 'Salvando...' : 'Salvar Configuração'}
         </button>
       </div>
 

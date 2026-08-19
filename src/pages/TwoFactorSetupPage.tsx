@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 
 /**
  * Página de configuração obrigatória de 2FA para equipe interna/Super Admin
@@ -14,7 +14,8 @@ export function TwoFactorSetupPage() {
   const [code, setCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { refreshUser, user } = useAuth();
+  const { user } = useAuthUser();
+  const { refreshUser } = useAuthActions();
 
   const handleGenerate = async () => {
     try {

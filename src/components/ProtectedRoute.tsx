@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { ApiError } from '../lib/api';
 import { useSubscription } from '../hooks/useSubscription';
 import { isSubscriptionBlocked } from '../utils/subscription';
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function ProtectedRoute({ children }: Props) {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading, user } = useAuthUser();
   const location = useLocation();
 
   const canCheckSubscription =

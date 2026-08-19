@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
 import { AlertTriangle, Phone, Mail, Eye, Ban, CheckCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthActions } from '../context/AuthContext';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
 import { formatBRL } from '../utils/format';
 
@@ -28,7 +28,7 @@ interface OverdueData {
 }
 
 export function InadimplentesPage() {
-  const { impersonate } = useAuth();
+  const { impersonate } = useAuthActions();
   const [filter, setFilter] = useState<'TODOS' | 'VENCIDO' | 'PENDENTE'>('TODOS');
 
   const { data, isLoading, refetch } = useApiQuery<OverdueData>(

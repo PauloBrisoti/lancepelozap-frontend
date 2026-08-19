@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { Modal } from '../components/Modal';
 import { Pagination } from '../components/Pagination';
 import { CashTransactionList } from '../components/CashTransactionList';
+import { useModal } from '../hooks/useModal';
 import type { CashTransaction } from '../types/api';
 import { useApiQuery, STALE_TIMES } from '../lib/query';
 import { formatBRL } from '../utils/format';
@@ -56,14 +57,14 @@ interface ClosingReport {
 }
 
 export function CashRegisterPage() {
-  const [openModal, setOpenModal] = useState(false);
-  const [closeModal, setCloseModal] = useState(false);
-  const [transModal, setTransModal] = useState(false);
-  const [reportModal, setReportModal] = useState(false);
+  const openModal = useModal();
+  const closeModal = useModal();
+  const transModal = useModal();
+  const reportModal = useModal();
   const [report, setReport] = useState<ClosingReport | null>(null);
+  const [closeResult, setCloseResult] = useState<{ saldoEsperado: number; diferenca: number } | null>(null);
   const [trocoInicial, setTrocoInicial] = useState('0');
   const [valorFechamento, setValorFechamento] = useState('0');
-  const [closeResult, setCloseResult] = useState<{ saldoEsperado: number; diferenca: number } | null>(null);
   const [transTipo, setTransTipo] = useState<'SANGRIA' | 'SUPRIMENTO'>('SANGRIA');
   const [transValor, setTransValor] = useState('');
   const [transDescricao, setTransDescricao] = useState('');
@@ -98,7 +99,7 @@ export function CashRegisterPage() {
         body: JSON.stringify({ valorTrocoInicial: parseFloat(trocoInicial) }),
       });
       toast.success('Caixa aberto com sucesso!');
-      setOpenModal(false);
+      openModal.closeModal();
       loadData();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao abrir caixa'); }
     finally { setSaving(false); }
@@ -113,7 +114,7 @@ export function CashRegisterPage() {
       });
       toast.success('Caixa fechado com sucesso!');
       setCloseResult({ saldoEsperado: Number(data.saldoEsperado), diferenca: Number(data.diferenca) });
-      setCloseModal(false);
+      closeModal.closeModal();
       loadData();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro ao fechar caixa'); }
     finally { setSaving(false); }
@@ -128,7 +129,7 @@ export function CashRegisterPage() {
         body: JSON.stringify({ tipo: transTipo, valor: parseFloat(transValor), descricao: transDescricao || undefined }),
       });
       toast.success(transTipo === 'SANGRIA' ? 'Sangria registrada!' : 'Suprimento registrado!');
-      setTransModal(false);
+      transModal.closeModal();
       setTransValor('');
       setTransDescricao('');
       loadData();
@@ -140,7 +141,7 @@ export function CashRegisterPage() {
     try {
       const data = await fetchApi(`/cash-register/${id}/summary`);
       setReport(data);
-      setReportModal(true);
+      reportModal.openModal();
     } catch { toast.error('Erro ao carregar relatório'); }
   };
 
@@ -166,15 +167,15 @@ export function CashRegisterPage() {
         <div className="flex gap-2">
           {current ? (
             <>
-              <button onClick={() => { setTransTipo('SUPRIMENTO'); setTransValor(''); setTransDescricao(''); setTransModal(true); }}
+              <button onClick={() => { setTransTipo('SUPRIMENTO'); setTransValor(''); setTransDescricao(''); transModal.openModal(); }}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">+ Suprimento</button>
-              <button onClick={() => { setTransTipo('SANGRIA'); setTransValor(''); setTransDescricao(''); setTransModal(true); }}
+              <button onClick={() => { setTransTipo('SANGRIA'); setTransValor(''); setTransDescricao(''); transModal.openModal(); }}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">- Sangria</button>
-              <button onClick={() => { setValorFechamento(String(saldoEsperado)); setCloseResult(null); setCloseModal(true); }}
+              <button onClick={() => { setValorFechamento(String(saldoEsperado)); setCloseResult(null); closeModal.openModal(); }}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Fechar Caixa</button>
             </>
           ) : (
-            <button onClick={() => setOpenModal(true)}
+            <button onClick={() => openModal.openModal()}
               className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm">Abrir Caixa</button>
           )}
         </div>
@@ -281,12 +282,12 @@ export function CashRegisterPage() {
         </div>
       )}
 
-      {openModal && (
-        <Modal open={openModal} onClose={() => setOpenModal(false)} size="sm" title="Abrir Caixa" rounded="xl" className="mx-4">
+      {openModal.open && (
+        <Modal open={openModal.open} onClose={openModal.closeModal} size="sm" title="Abrir Caixa" rounded="xl" className="mx-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Troco Inicial</label>
             <input type="number" step="0.01" value={trocoInicial} onChange={e => setTrocoInicial(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4" />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setOpenModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+              <button onClick={openModal.closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleOpen} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Abrindo...' : 'Abrir Caixa'}
               </button>
@@ -294,8 +295,8 @@ export function CashRegisterPage() {
         </Modal>
       )}
 
-      {closeModal && (
-        <Modal open={closeModal} onClose={() => setCloseModal(false)} size="sm" title="Fechar Caixa" rounded="xl" className="mx-4">
+      {closeModal.open && (
+        <Modal open={closeModal.open} onClose={closeModal.closeModal} size="sm" title="Fechar Caixa" rounded="xl" className="mx-4">
           <p className="text-sm text-gray-500 mb-4">Saldo esperado: <strong className="text-brand-700">{formatBRL(saldoEsperado)}</strong></p>
             <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total no Caixa</label>
             <input
@@ -307,7 +308,7 @@ export function CashRegisterPage() {
               Diferença: {formatBRL(Number(valorFechamento) - saldoEsperado)}
             </p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setCloseModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+              <button onClick={closeModal.closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleClose} disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
                 {saving ? 'Fechando...' : 'Fechar Caixa'}
               </button>
@@ -315,11 +316,11 @@ export function CashRegisterPage() {
         </Modal>
       )}
 
-      {reportModal && report && (
-        <Modal open={reportModal} onClose={() => setReportModal(false)} size="lg">
+      {reportModal.open && report && (
+        <Modal open={reportModal.open} onClose={reportModal.closeModal} size="lg">
           <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">Relatório de Fechamento</h2>
-              <button onClick={() => setReportModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={reportModal.closeModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
 
             <div className="space-y-4">
@@ -389,8 +390,8 @@ export function CashRegisterPage() {
         </Modal>
       )}
 
-      {transModal && (
-        <Modal open={transModal} onClose={() => setTransModal(false)} size="sm" title={transTipo === 'SANGRIA' ? 'Registrar Sangria' : 'Registrar Suprimento'} rounded="xl" className="mx-4">
+      {transModal.open && (
+        <Modal open={transModal.open} onClose={transModal.closeModal} size="sm" title={transTipo === 'SANGRIA' ? 'Registrar Sangria' : 'Registrar Suprimento'} rounded="xl" className="mx-4">
           <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
               <select value={transTipo} onChange={e => setTransTipo(e.target.value as 'SANGRIA' | 'SUPRIMENTO')} className="w-full border border-gray-300 rounded-lg px-3 py-2">
@@ -403,7 +404,7 @@ export function CashRegisterPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Descrição (opcional)</label>
             <input type="text" value={transDescricao} onChange={e => setTransDescricao(e.target.value)} placeholder="Ex: Pagamento de fornecedor" className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4" />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setTransModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+              <button onClick={transModal.closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleTransaction} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? 'Registrando...' : 'Registrar'}
               </button>

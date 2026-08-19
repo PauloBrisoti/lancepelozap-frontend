@@ -2,7 +2,7 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
 import { TrendingUp, TrendingDown, Banknote, HandCoins, CalendarClock, Receipt, PiggyBank, Scale, Activity, Box, FileMinus, Wallet as WalletIcon, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../context/AuthContext';
 import { useDateFilter, type DatePeriod } from '../hooks/useDateFilter';
 import { useFinanceiroModals } from '../hooks/useFinanceiroModals';
 import { useFinanceiroDashboard } from '../hooks/useFinanceiroDashboard';
@@ -19,7 +19,7 @@ import { BaixaPagarModal } from '../components/BaixaPagarModal';
 import { CobrancaModal } from '../components/CobrancaModal';
 
 export const FinanceiroPage: React.FC = () => {
-  const { activeStoreId } = useAuth();
+  const { activeStoreId } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'TRANSACOES' | 'RECEBER' | 'PAGAR' | 'DRE'>('TRANSACOES');
 
   // Date filter state
@@ -45,26 +45,10 @@ export const FinanceiroPage: React.FC = () => {
   const { carregarDados } = dashboard;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Modais (useReducer)
+  // Modais (useReducer) — os formulários vivem dentro de cada modal
   const modais = useFinanceiroModals<Receivable, Payable>();
 
-  // Tipo do lançamento no modal unificado
-
-  // Form Lançamento (Receita / Despesa à Vista)
-  const [formTx, setFormTx] = useState<LancamentoForm>({ 
-    id: '', tipo: 'SAIDA', valor: '', descricao: '', walletId: '', categoria: '', dataTransacao: '',
-    customerId: '', fornecedor: '',
-    isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: true,
-    comprovante: null
-  });
-  // Form Baixa
-  const [formBaixa, setFormBaixa] = useState({ walletId: '', valorPago: '' });
-  // Form Conta a Pagar
-  const [formPayable, setFormPayable] = useState<PayableForm>({ id: '', descricao: '', categoria: '', fornecedor: '', dataVencimento: '', valor: '', isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: false });
-  const [formBaixaPagar, setFormBaixaPagar] = useState({ walletId: '' });
-
-  const handleSalvarLancamento = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSalvarTx = async (formTx: LancamentoForm) => {
     try {
       const formData = new FormData();
       Object.keys(formTx).forEach(key => {
@@ -100,26 +84,6 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const handleCriarCategoria = async (tipo: 'ENTRADA' | 'SAIDA') => {
-    if (!modais.novaCategoriaNome.trim()) return;
-    try {
-      await fetchApi('/finance/categories', {
-        method: 'POST',
-        body: JSON.stringify({ nome: modais.novaCategoriaNome.trim(), tipo }),
-      });
-      if (modais.tipoLancamento === 'CONTA_PAGAR') {
-        setFormPayable({ ...formPayable, categoria: modais.novaCategoriaNome.trim() });
-      } else {
-        setFormTx({ ...formTx, categoria: modais.novaCategoriaNome.trim() });
-      }
-      modais.setNovaCategoriaMode(null);
-      modais.setNovaCategoriaNome('');
-      toast.success('Categoria criada!');
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao criar categoria');
-    }
-  };
-
   const handleHardReset = async () => {
     const confirmar = window.confirm("CUIDADO: Tem certeza que deseja apagar TODOS os dados financeiros desta loja? O catálogo de produtos será mantido.");
     if (!confirmar) return;
@@ -136,38 +100,13 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const handleTipoLancamentoChange = (tipo: 'RECEITA' | 'DESPESA_VISTA' | 'CONTA_PAGAR') => {
-    modais.setTipoLancamento(tipo);
-    modais.setNovaCategoriaMode(null);
-    modais.setNovaCategoriaNome('');
-    if (tipo === 'CONTA_PAGAR') {
-    setFormPayable({ id: '', descricao: '', categoria: '', fornecedor: '', dataVencimento: '', valor: '', isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: false });
-    } else {
-      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-      const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
-      setFormTx(prev => ({
-        ...prev,
-        id: '',
-        tipo: tipo === 'RECEITA' ? 'ENTRADA' : 'SAIDA',
-        descricao: '',
-        valor: '',
-        categoria: '',
-        customerId: '',
-        fornecedor: '',
-        dataTransacao: localISOTime,
-        isParcelado: false,
-        numeroParcelas: 2,
-      }));
-    }
-  };
-
   const abrirModalEditarTx = (tx: Transaction) => {
     // Local datetime format: YYYY-MM-DDThh:mm
     const dateObj = new Date(tx.dataTransacao);
     const tzoffset = dateObj.getTimezoneOffset() * 60000; // offset in milliseconds
     const localISOTime = (new Date(dateObj.getTime() - tzoffset)).toISOString().slice(0, 16);
 
-    setFormTx({
+    modais.openLancamentoTx({
       id: tx.id,
       tipo: tx.tipo,
       valor: tx.valor.toString(),
@@ -183,32 +122,22 @@ export const FinanceiroPage: React.FC = () => {
       isFirstPaid: true,
       comprovante: null
     });
-    modais.openLancamento();
   };
 
   const abrirModalNovoLancamento = (tipo?: 'RECEITA' | 'DESPESA_VISTA' | 'CONTA_PAGAR') => {
-    const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
-    modais.setTipoLancamento(tipo || 'RECEITA');
-    setFormTx({ 
-      id: '', tipo: tipo === 'RECEITA' ? 'ENTRADA' : 'SAIDA', valor: '', descricao: '', walletId: wallets[0]?.id || '', categoria: '', dataTransacao: localISOTime,
-      customerId: '', fornecedor: '', isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: true, comprovante: null
-    });
-    setFormPayable({ id: '', descricao: '', categoria: '', fornecedor: '', dataVencimento: '', valor: '', isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: false });
-    modais.openLancamento();
+    modais.openLancamentoTipo(tipo || 'RECEITA');
   };
 
-  const handleBaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBaixa = async (valorPago: string, walletId: string) => {
     try {
       if (!modais.baixa.rec) return;
-      if (!formBaixa.walletId) {
+      if (!walletId) {
         toast.error('Selecione uma carteira para receber o pagamento.');
         return;
       }
       await fetchApi(`/finance/receivables/${modais.baixa.rec.id}/pay`, {
         method: 'POST',
-        body: JSON.stringify({ walletId: formBaixa.walletId, valorPago: Number(formBaixa.valorPago) })
+        body: JSON.stringify({ walletId, valorPago: Number(valorPago) })
       });
       toast.success('Baixa realizada com sucesso!');
       modais.closeBaixa();
@@ -218,13 +147,12 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const handleBaixaPagar = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBaixaPagar = async (walletId: string) => {
     try {
       if (!modais.baixaPagar.payable) return;
       await fetchApi(`/finance/payables/${modais.baixaPagar.payable.id}/pay`, {
         method: 'POST',
-        body: JSON.stringify({ walletId: formBaixaPagar.walletId })
+        body: JSON.stringify({ walletId })
       });
       toast.success('Conta paga com sucesso!');
       modais.closeBaixaPagar();
@@ -234,8 +162,7 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const handleSalvarPayable = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSalvarPayable = async (formPayable: PayableForm) => {
     try {
       if (formPayable.id) {
         await fetchApi(`/finance/payables/${formPayable.id}`, {
@@ -255,6 +182,12 @@ export const FinanceiroPage: React.FC = () => {
     } catch (error) {
       toast.error('Erro ao salvar conta a pagar');
     }
+  };
+
+  // Mudança de aba descarta a seleção anterior (IDs de outra entidade não valem na nova aba)
+  const changeTab = (tab: 'TRANSACOES' | 'RECEBER' | 'PAGAR' | 'DRE') => {
+    setActiveTab(tab);
+    setSelectedIds([]);
   };
 
   const handleToggleSelect = (id: string) => {
@@ -610,7 +543,8 @@ export const FinanceiroPage: React.FC = () => {
                     'bg-rose-100 text-rose-600'
                   }`}>
                     {pjData.lucroCrescimento > 0 ? <TrendingUp className="w-3 h-3" /> : pjData.lucroCrescimento < 0 ? <TrendingDown className="w-3 h-3" /> : null}
-                    {pjData.lucroCrescimento === 0 ? 'Neutro vs ant.' : ` ${pjData.lucroCrescimento > 0 ? '+' : ''}${pjData.lucroCrescimento.toFixed(1)}%`}
+                    {pjData?.lucroCrescimento == null || pjData.lucroCrescimento === 0 ? 'Neutro vs ant.' : ` ${pjData.lucroCrescimento > 0 ? '+' : ''}${(pjData.lucroCrescimento ?? 0).toFixed(1)}%`}
+                  
                   </span>
                 )}
               </div>
@@ -757,25 +691,25 @@ export const FinanceiroPage: React.FC = () => {
           <div className="flex bg-gray-100 p-1 rounded-xl overflow-x-auto">
             <button 
               className={`flex-1 px-4 py-2 rounded-lg font-semibold text-xs md:text-sm whitespace-nowrap transition-colors ${activeTab === 'TRANSACOES' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('TRANSACOES')}
+              onClick={() => changeTab('TRANSACOES')}
             >
               Extrato
             </button>
             <button 
               className={`flex-1 px-4 py-2 rounded-lg font-semibold text-xs md:text-sm whitespace-nowrap transition-colors ${activeTab === 'RECEBER' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('RECEBER')}
+              onClick={() => changeTab('RECEBER')}
             >
               A Receber
             </button>
             <button 
               className={`flex-1 px-4 py-2 rounded-lg font-semibold text-xs md:text-sm whitespace-nowrap transition-colors ${activeTab === 'PAGAR' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('PAGAR')}
+              onClick={() => changeTab('PAGAR')}
             >
               A Pagar
             </button>
             <button 
               className={`flex-1 px-4 py-2 rounded-lg font-semibold text-xs md:text-sm whitespace-nowrap transition-colors ${activeTab === 'DRE' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('DRE')}
+              onClick={() => changeTab('DRE')}
             >
               DRE
             </button>
@@ -914,7 +848,7 @@ export const FinanceiroPage: React.FC = () => {
                       <td className="px-3 md:px-4 py-2.5 md:py-3 text-center">
                         {!isPago && (
                           <button 
-                            onClick={() => { setFormBaixa({ walletId: wallets[0]?.id || '', valorPago: '' }); modais.openBaixa(rec); }}
+                            onClick={() => { modais.openBaixa(rec); }}
                             className="text-[10px] md:text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 md:px-3 py-1 md:py-1.5 rounded-lg shadow-sm transition-colors whitespace-nowrap"
                           >
                             {totalPago > 0 ? 'Completar' : 'Receber'}
@@ -978,8 +912,7 @@ export const FinanceiroPage: React.FC = () => {
                       <td className="px-3 md:px-4 py-2.5 md:py-3 text-center">
                         <button
                           onClick={() => {
-                            modais.setTipoLancamento('CONTA_PAGAR');
-                            setFormPayable({
+                            modais.openLancamentoPayable({
                               id: pay.id,
                               descricao: pay.descricao,
                               categoria: pay.categoria || '',
@@ -991,7 +924,6 @@ export const FinanceiroPage: React.FC = () => {
                               frequencia: 'MENSAL',
                               isFirstPaid: false,
                             });
-                            modais.openLancamento();
                           }}
                           className="text-sm text-gray-400 hover:text-brand-600 px-2 py-1 font-medium transition-colors"
                         >
@@ -999,7 +931,7 @@ export const FinanceiroPage: React.FC = () => {
                         </button>
                         {pay.status === 'PENDENTE' && (
                           <button 
-                            onClick={() => { setFormBaixaPagar({ walletId: wallets[0]?.id || '' }); modais.openBaixaPagar(pay); }}
+                            onClick={() => modais.openBaixaPagar(pay)}
                             className="text-xs md:text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg shadow-sm transition-colors"
                           >
                             Pagar
@@ -1062,7 +994,7 @@ export const FinanceiroPage: React.FC = () => {
                 <div className="flex justify-between px-4 py-3.5 bg-gray-50/80 border-b border-gray-200">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-800 text-sm">5. (=) RESULTADO OPERACIONAL BRUTO</span>
-                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full tabular-nums">Margem: {dreData.margemLucroBruto.toFixed(1)}%</span>
+                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full tabular-nums">Margem: {(dreData?.margemLucroBruto ?? 0).toFixed(1)}%</span>
                   </div>
                   <span className="font-bold text-gray-800 text-sm tabular-nums">{formatBRL(dreData.lucroBruto)}</span>
                 </div>
@@ -1087,7 +1019,7 @@ export const FinanceiroPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm md:text-base">7. (=) RESULTADO LÍQUIDO DO EXERCÍCIO</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold tabular-nums ${dreData.lucroLiquido >= 0 ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-800'}`}>
-                      Margem Líquida: {dreData.margemLucroLiquido.toFixed(1)}%
+                      Margem Líquida: {(dreData?.margemLucroLiquido ?? 0).toFixed(1)}%
                     </span>
                   </div>
                   <span className="font-bold text-sm md:text-base tabular-nums">{formatBRL(dreData.lucroLiquido)}</span>
@@ -1101,34 +1033,19 @@ export const FinanceiroPage: React.FC = () => {
 
       {/* MODAIS: Lançamento, Baixa, Pagar Conta, Cobrança WhatsApp */}
       <LancamentoModal
-        open={modais.lancamento}
+        open={modais.lancamento.isOpen}
         onClose={() => modais.closeLancamento()}
-        activeStoreId={activeStoreId}
-        tipoLancamento={modais.tipoLancamento}
-        onTipoLancamentoChange={handleTipoLancamentoChange}
-        formTx={formTx}
-        setFormTx={setFormTx}
-        formPayable={formPayable}
-        setFormPayable={setFormPayable}
-        onSubmitTx={handleSalvarLancamento}
+        tipoInicial={modais.lancamento.tipoInicial}
+        initialTx={modais.lancamento.initialTx}
+        initialPayable={modais.lancamento.initialPayable}
+        onSubmitTx={handleSalvarTx}
         onSubmitPayable={handleSalvarPayable}
-        onCriarCategoria={handleCriarCategoria}
-        criarCategoriaAberto={modais.novaCategoriaMode !== null}
-        novaCategoriaNome={modais.novaCategoriaNome}
-        setNovaCategoriaNome={modais.setNovaCategoriaNome}
-        abrirCriarCategoria={() => modais.setNovaCategoriaMode('tx')}
-        cancelarCriarCategoria={() => { modais.setNovaCategoriaMode(null); modais.setNovaCategoriaNome(''); }}
       />
 
       <BaixaModal
         open={modais.baixa.isOpen}
         onClose={() => modais.closeBaixa()}
         rec={modais.baixa.rec ?? null}
-        activeStoreId={activeStoreId}
-        valorPago={formBaixa.valorPago}
-        setValorPago={valor => setFormBaixa(prev => ({ ...prev, valorPago: valor }))}
-        walletId={formBaixa.walletId}
-        setWalletId={walletId => setFormBaixa(prev => ({ ...prev, walletId }))}
         onSubmit={handleBaixa}
       />
 
@@ -1136,9 +1053,6 @@ export const FinanceiroPage: React.FC = () => {
         open={modais.baixaPagar.isOpen}
         onClose={() => modais.closeBaixaPagar()}
         payable={modais.baixaPagar.payable ?? null}
-        activeStoreId={activeStoreId}
-        walletId={formBaixaPagar.walletId}
-        setWalletId={walletId => setFormBaixaPagar(prev => ({ ...prev, walletId }))}
         onSubmit={handleBaixaPagar}
       />
 

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { fetchApi, ApiError } from '../lib/api';
 import { usePoll } from './usePoll';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 
 interface StockAlert {
   id: string;
@@ -19,21 +19,16 @@ interface AlertsResponse {
 
 /**
  * Hook que busca alertas de estoque baixo a cada 60 segundos.
- *
- * Melhorias em relação à versão anterior:
- * - Usa fetchApi em vez de fetch direto (funciona com proxy reverso)
- * - AbortController para cancelar requests anteriores
- * - Evita race conditions com ref de mounted
- * - Tipagem completa sem "any"
  */
 export function useStockAlerts() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuthUser();
   const [count, setCount] = useState(0);
   const [products, setProducts] = useState<StockAlert[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetch = useCallback(async () => {
-    if (!isAuthenticated) return;
+    // Não dispara requisição de loja se não estiver logado ou se for SUPER_ADMIN
+    if (!isAuthenticated || user?.role === 'SUPER_ADMIN') return;
 
     // Cancela request anterior se ainda estiver pendente
     if (abortRef.current) abortRef.current.abort();
@@ -42,18 +37,16 @@ export function useStockAlerts() {
     try {
       const data = await fetchApi<AlertsResponse>('/inventory/alerts', {
         signal: abortRef.current.signal,
-        timeout: 10000, // 10s é suficiente para alertas
+        timeout: 10000,
       });
       setCount(data.count);
       setProducts(data.products);
     } catch (error: unknown) {
-      if (error instanceof ApiError && error.status === 408) {
-        // Timeout — não mostrar erro, tentar de novo no próximo ciclo
+      if (error instanceof ApiError && (error.status === 408 || error.status === 401 || error.status === 403)) {
         return;
       }
-      // Falha silenciosa (pode estar offline ou sem permissão)
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.role]);
 
   // Polling a cada 60s, pausado quando a aba está oculta
   usePoll(fetch, 60_000);

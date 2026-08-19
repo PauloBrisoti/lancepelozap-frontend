@@ -13,7 +13,7 @@ React 19 + TypeScript + Tailwind 3.4 + Vite 8 + React Router 8 (`react-router`, 
 - Modais: componente `Modal` (`open=false` → null) + hook `useModal`; CRUD: `useCrudList`
 - Datas/fuso: `src/lib/dates.ts` (`formatDateBR`/`formatDateTimeBR`, TZ Brasília); formato de valores: `src/utils/format.ts` (`formatBRL`, `formatNome`, `todayLocalDate`)
 - Mapas de domínio (status/pagamentos): `src/utils/domainMaps.ts`
-- Auth: `src/context/AuthContext.tsx` — eventos `session_expired` e `two_factor_setup_required` no `window` (401 e 2FA obrigatório vêm daqui)
+- Auth: `src/context/AuthContext.tsx` — eventos `session_expired` e `two_factor_setup_required` no `window` (401 e 2FA obrigatório vêm daqui). Consumir via hooks granulares: `useAuthUser` (user/loading/activeWorkspace/isPf/isRestrictedRole/canAccess), `useAuthStore` (activeStoreId), `useAuthActions` (login/logout/switchWorkspace/impersonate/revertImpersonate/refreshUser — identidade estável). Não re-criar o hook único `useAuth`.
 - Backend local em `/Users/paulobarbosa/Projetos/backend` — consulte para validar contratos de API
 
 ## Pendências da auditoria (concluídas em ago/2026)

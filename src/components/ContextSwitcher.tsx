@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 import { useCreateStore } from '../hooks/useCreateStore';
 import { X } from 'lucide-react';
 
 export function ContextSwitcher() {
-  const { user, activeWorkspace, switchWorkspace } = useAuth();
+  const { user, activeWorkspace } = useAuthUser();
+  const { switchWorkspace } = useAuthActions();
   const { creating: creatingStore, createStore } = useCreateStore();
   const [isOpen, setIsOpen] = useState(false);
   const [showNewStore, setShowNewStore] = useState(false);

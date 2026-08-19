@@ -1,45 +1,52 @@
-import type { FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Modal } from './Modal';
 import { formatBRL } from '../utils/format';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
-import { useAuth } from '../context/AuthContext';
-import type { Wallet, Receivable } from '../hooks/useFinanceiroDashboard';
+import { saldoRestante, valorMaximoBaixa } from '../utils/financeiro';
+import { useWallets } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
+import type { Receivable } from '../hooks/useFinanceiroDashboard';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   rec: Receivable | null;
-  valorPago: string;
-  setValorPago: (valor: string) => void;
-  walletId: string;
-  setWalletId: (walletId: string) => void;
-  onSubmit: (e: FormEvent) => void;
+  onSubmit: (valorPago: string, walletId: string) => void;
 }
 
 /** Modal de baixa (registrar pagamento de uma parcela a receber) */
-export function BaixaModal({
-  open,
-  onClose,
-  rec,
-  valorPago,
-  setValorPago,
-  walletId,
-  setWalletId,
-  onSubmit,
-}: Props) {
-  const { activeStoreId } = useAuth();
-  const walletsQ = useApiQuery<{ wallets: Wallet[] }>(
-    ['finance-dashboard', activeStoreId],
-    '/finance/dashboard',
-    { staleTime: STALE_TIMES.FREQUENT, enabled: open }
-  );
+export function BaixaModal({ open, onClose, rec, onSubmit }: Props) {
+  const { activeStoreId } = useAuthStore();
+  const walletsQ = useWallets(activeStoreId, open);
   const wallets = walletsQ.data?.wallets ?? [];
+
+  // Estado próprio do modal: valor e carteira vivem aqui
+  const [valorPago, setValorPago] = useState('');
+  const [walletId, setWalletId] = useState('');
+
+  // Reset a cada abertura
+  useEffect(() => {
+    if (!open) return;
+    setValorPago('');
+    setWalletId('');
+  }, [open, rec]);
+
+  // Pré-seleciona a primeira carteira quando as carteiras carregam
+  useEffect(() => {
+    if (!open || !rec) return;
+    if (wallets.length > 0 && !walletId) {
+      setWalletId(wallets[0].id);
+    }
+  }, [open, rec, wallets, walletId]);
 
   if (!open || !rec) return null;
 
-  const tp = rec.valorJaPago ?? 0;
-  const sr = rec.saldoRestante ?? (Number(rec.valorParcela) - tp);
-  const maxPagamento = Math.max(0, sr);
+  const sr = saldoRestante(rec);
+  const maxPagamento = valorMaximoBaixa(rec);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    onSubmit(valorPago, walletId);
+  };
 
   return (
     <Modal open={open} onClose={onClose} size="sm" title="Confirmar Pagamento">
@@ -47,10 +54,10 @@ export function BaixaModal({
         Cliente: <strong>{rec.customer?.nomeCompleto || 'Cliente'}</strong><br />
         Parcela: {rec.numeroParcela}/{rec.totalParcelas}<br />
         Valor Original: {formatBRL(Number(rec.valorParcela))}<br />
-        Já Pago: {formatBRL(Number(tp))}<br />
+        Já Pago: {formatBRL(Number(rec.valorJaPago ?? 0))}<br />
         Saldo Restante: <strong>{formatBRL(Number(sr))}</strong>
       </p>
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Valor Recebido (R$)</label>
           <input required type="number" step="0.01" min="0.01" placeholder="Digite o valor a pagar" className="w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none" value={valorPago} onChange={e => {

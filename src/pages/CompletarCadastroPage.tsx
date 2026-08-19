@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { fetchApi, ApiError } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuthActions } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 
 export function CompletarCadastroPage() {
-  const { refreshUser } = useAuth();
+  const { refreshUser } = useAuthActions();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({

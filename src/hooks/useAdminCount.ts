@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { usePoll } from './usePoll';
 
 /**
@@ -16,7 +16,7 @@ export function useAdminCount<T>(
   select: (data: T) => number,
   deps: unknown[] = []
 ): number | null {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const [count, setCount] = useState<number | null>(null);
 
   usePoll(

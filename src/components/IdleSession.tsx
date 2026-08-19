@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos sem interação
 const WARNING_MS = 60 * 1000; // aviso 1 minuto antes
@@ -9,7 +9,8 @@ const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'
 const PUBLIC_PATHS = ['/login', '/reset-password', '/cadastro', '/catalogo', '/portal'];
 
 export function IdleSession() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAuthUser();
+  const { logout } = useAuthActions();
   const location = useLocation();
   const [warningVisible, setWarningVisible] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);

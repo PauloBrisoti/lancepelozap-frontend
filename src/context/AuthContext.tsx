@@ -38,11 +38,19 @@ interface User {
 
 const RESTRICTED_ROLES = ['VENDEDOR', 'CAIXA'];
 
-interface AuthContextType {
+/**
+ * Contexto dividido por frequência de mudança:
+ * - useAuthActions: funções estáveis (nunca re-renderizam consumidores)
+ * - useAuthUser: dados do usuário (mudam quando o /auth/me muda de conteúdo)
+ * - useAuthStore: loja ativa (muda apenas em switchWorkspace/impersonate/logout)
+ * Isso evita que consumidores de um tipo re-renderizem quando outro muda
+ * (ex.: páginas que só usam activeStoreId não re-renderizam a cada refresh).
+ */
+
+interface AuthUserContextType {
   isAuthenticated: boolean;
   user: User | null;
   loading: boolean;
-  activeStoreId: string | null;
   activeWorkspace: Workspace | null;
   /** Workspace atual é do tipo pessoa física (finanças pessoais) */
   isPf: boolean;
@@ -50,16 +58,24 @@ interface AuthContextType {
   isRestrictedRole: boolean;
   /** Semântica de feature flag: sem features cadastradas => tudo liberado */
   canAccess: (feature?: string) => boolean;
+}
+
+interface AuthStoreContextType {
+  activeStoreId: string | null;
+}
+
+interface AuthActionsContextType {
   login: (user: User) => void;
   logout: () => Promise<void>;
-  switchStore: (storeId: string) => void;
   switchWorkspace: (workspaceId: string) => void;
   impersonate: (storeId: string) => Promise<void>;
   revertImpersonate: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthUserContext = createContext<AuthUserContextType | undefined>(undefined);
+const AuthStoreContext = createContext<AuthStoreContextType | undefined>(undefined);
+const AuthActionsContext = createContext<AuthActionsContextType | undefined>(undefined);
 
 /**
  * Lê um cookie pelo nome.
@@ -184,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = (userData: User) => {
+  const login = useCallback((userData: User) => {
     setUser(userData);
     if (userData.workspaces && userData.workspaces.length > 0) {
       const firstWorkspace = userData.workspaces[0];
@@ -196,9 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStoreIdCookie(null);
       localStorage.removeItem(ACTIVE_STORE_KEY);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetchApi('/auth/logout', { method: 'POST' });
     } catch (error) {
@@ -209,36 +225,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStoreIdCookie(null);
       localStorage.removeItem(ACTIVE_STORE_KEY);
     }
-  };
+  }, []);
 
-  const switchStore = (storeId: string) => {
-    switchWorkspace(storeId);
-  };
-
-  const switchWorkspace = (workspaceId: string) => {
-    setActiveStoreId(workspaceId);
-    setStoreIdCookie(workspaceId);
-    localStorage.removeItem(ACTIVE_STORE_KEY);
-    refreshUser();
-  };
-
-  const impersonate = async (storeId: string) => {
-    await fetchApi(`/super-admin/impersonate/${storeId}`, { method: 'POST' });
-    setActiveStoreId(storeId);
-    setStoreIdCookie(storeId);
-    localStorage.removeItem(ACTIVE_STORE_KEY);
-    window.location.href = '/app';
-  };
-
-  const revertImpersonate = async () => {
-    await fetchApi('/super-admin/revert-impersonate', { method: 'POST' });
-    setActiveStoreId(null);
-    setStoreIdCookie(null);
-    localStorage.removeItem(ACTIVE_STORE_KEY);
-    window.location.href = '/admin';
-  };
-
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const data = await fetchApi('/auth/me');
       if (data.user) {
@@ -247,21 +236,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao recarregar usuário', error);
     }
-  };
+  }, []);
 
-  const isAuthenticated = !!user;
+  const switchWorkspace = useCallback((workspaceId: string) => {
+    setActiveStoreId(workspaceId);
+    setStoreIdCookie(workspaceId);
+    localStorage.removeItem(ACTIVE_STORE_KEY);
+    refreshUser();
+  }, [refreshUser]);
+
+  const impersonate = useCallback(async (storeId: string) => {
+    await fetchApi(`/super-admin/impersonate/${storeId}`, { method: 'POST' });
+    setActiveStoreId(storeId);
+    setStoreIdCookie(storeId);
+    localStorage.removeItem(ACTIVE_STORE_KEY);
+    window.location.href = '/app';
+  }, []);
+
+  const revertImpersonate = useCallback(async () => {
+    await fetchApi('/super-admin/revert-impersonate', { method: 'POST' });
+    setActiveStoreId(null);
+    setStoreIdCookie(null);
+    localStorage.removeItem(ACTIVE_STORE_KEY);
+    window.location.href = '/admin';
+  }, []);
+
+  const actionsValue = useMemo(
+    () => ({ login, logout, switchWorkspace, impersonate, revertImpersonate, refreshUser }),
+    [login, logout, switchWorkspace, impersonate, revertImpersonate, refreshUser]
+  );
+
+  const userValue = useMemo(
+    () => ({
+      isAuthenticated: !!user,
+      user,
+      loading,
+      activeWorkspace,
+      isPf,
+      isRestrictedRole,
+      canAccess,
+    }),
+    [user, loading, activeWorkspace, isPf, isRestrictedRole, canAccess]
+  );
+
+  const storeValue = useMemo(() => ({ activeStoreId }), [activeStoreId]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, activeStoreId, activeWorkspace, isPf, isRestrictedRole, canAccess, login, logout, switchStore, switchWorkspace, impersonate, revertImpersonate, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthActionsContext.Provider value={actionsValue}>
+      <AuthUserContext.Provider value={userValue}>
+        <AuthStoreContext.Provider value={storeValue}>
+          {children}
+        </AuthStoreContext.Provider>
+      </AuthUserContext.Provider>
+    </AuthActionsContext.Provider>
   );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
+/** Dados do usuário: user, loading, activeWorkspace, isPf, isRestrictedRole, canAccess */
+export function useAuthUser() {
+  const context = useContext(AuthUserContext);
   if (context === undefined) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+    throw new Error('useAuthUser deve ser usado dentro de um AuthProvider');
+  }
+  return context;
+}
+
+/** Loja ativa (activeStoreId) — re-renderiza só quando a loja muda */
+export function useAuthStore() {
+  const context = useContext(AuthStoreContext);
+  if (context === undefined) {
+    throw new Error('useAuthStore deve ser usado dentro de um AuthProvider');
+  }
+  return context;
+}
+
+/** Ações de sessão (login/logout/switchWorkspace/impersonate/refreshUser) — identidade estável */
+export function useAuthActions() {
+  const context = useContext(AuthActionsContext);
+  if (context === undefined) {
+    throw new Error('useAuthActions deve ser usado dentro de um AuthProvider');
   }
   return context;
 }

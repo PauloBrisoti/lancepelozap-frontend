@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuthUser } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -71,7 +71,7 @@ const PageLoader = () => (
 );
 
 function AppFinanceiro() {
-  const { activeWorkspace, loading } = useAuth();
+  const { activeWorkspace, loading } = useAuthUser();
   if (loading || !activeWorkspace) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500" /></div>;
   }
@@ -82,7 +82,7 @@ function AppFinanceiro() {
 }
 
 function FeatureGuard({ children, feature }: { children: React.ReactNode; feature?: string }) {
-  const { isPf } = useAuth();
+  const { isPf } = useAuthUser();
   const location = useLocation();
 
   const storeRoutes = ['pdv','caixa','vendas','os','agenda','orcamentos','compras',
@@ -103,7 +103,7 @@ const RESTRICTED_BLOCKED_PATHS = ['dashboard-pj', 'insights', 'bi', 'relatorios'
   'planos', 'configuracoes', 'importacao-legada', 'importar-planilha'];
 
 function StoreRoleGuard({ children }: { children: React.ReactNode }) {
-  const { isRestrictedRole } = useAuth();
+  const { isRestrictedRole } = useAuthUser();
   const location = useLocation();
 
   if (isRestrictedRole) {

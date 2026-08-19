@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore, useAuthUser } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
-import { useApiQuery } from '../lib/query';
+import { useApiQuery, queryKeys } from '../lib/query';
 import { toast } from 'react-hot-toast';
 import { Download, FileText, Search, ShoppingBag, Inbox } from 'lucide-react';
-import { useDateFilter } from '../hooks/useDateFilter';
+import { useDateFilter, type DatePeriod } from '../hooks/useDateFilter';
 import { Pagination } from '../components/Pagination';
 import { todayLocalDate, formatNome } from '../utils/format';
+import { saldoRestante } from '../utils/financeiro';
 import { SALE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '../utils/domainMaps';
 import { formatDateBR, formatDateTimeBR } from '../lib/dates';
 import jsPDF from 'jspdf';
@@ -24,28 +25,27 @@ const formatMoney = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDi
 const formatDataHora = (iso: string) => formatDateTimeBR(iso);
 
 export function VendasPage() {
-  const { activeStoreId, user, isRestrictedRole } = useAuth();
+  const { activeStoreId } = useAuthStore();
+  const { user, isRestrictedRole } = useAuthUser();
   // VENDEDOR/CAIXA vê só as próprias vendas, sem indicadores de margem/custo
   const storeId = activeStoreId || user?.workspaces?.[0]?.id || '';
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [editForm, setEditForm] = useState({ customerId: '', formaPagamento: '', valorDesconto: '', valorSinal: '', numeroParcelas: '1', dataVenda: '' });
-  const [dateFilter, setDateFilter] = useState('30d');
-  const { start, end, query } = useDateFilter(dateFilter as '7d' | '30d' | 'este_mes' | 'tudo');
+  const [dateFilter, setDateFilter] = useState<DatePeriod>('30d');
+  const { start, end, query } = useDateFilter(dateFilter);
   const [search, setSearch] = useState('');
   const [filterPagamento, setFilterPagamento] = useState('TODOS');
   const [filterStatus, setFilterStatus] = useState('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('TODOS');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [page, setPage] = useState(1);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; deleting: boolean } | null>(null);
 
   const endpoint = `/sales${query}`;
 
   const { data: salesData, isLoading, refetch } = useApiQuery<Sale[]>(
-    ['sales', storeId, dateFilter, start, end],
+    queryKeys.sales(storeId, dateFilter, start, end),
     endpoint,
     { staleTime: 0 }
   );
@@ -89,27 +89,25 @@ export function VendasPage() {
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setDeleteTargetId(id);
-    setShowDeleteModal(true);
+    setDeleteTarget({ id, deleting: false });
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteTargetId) return;
-    setDeleting(true);
+    if (!deleteTarget) return;
+    setDeleteTarget(prev => prev ? { ...prev, deleting: true } : prev);
     try {
-      const { token } = await fetchApi<{ token: string }>(`/sales/${deleteTargetId}/request-delete`, { method: 'POST' });
-      await fetchApi(`/sales/${deleteTargetId}/confirm-delete`, {
+      const { token } = await fetchApi<{ token: string }>(`/sales/${deleteTarget.id}/request-delete`, { method: 'POST' });
+      await fetchApi(`/sales/${deleteTarget.id}/confirm-delete`, {
         method: 'POST',
         body: JSON.stringify({ token }),
       });
       toast.success('Venda excluída permanentemente!');
-      setShowDeleteModal(false);
-      setDeleteTargetId(null);
+      setDeleteTarget(null);
       refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao excluir venda');
     } finally {
-      setDeleting(false);
+      setDeleteTarget(prev => prev ? { ...prev, deleting: false } : prev);
     }
   };
 
@@ -266,7 +264,7 @@ export function VendasPage() {
 
   const valorPagamentosPendentes = filtered.reduce((acc, sale) => {
     if (sale.receivables && sale.receivables.length > 0) {
-      return acc + sale.receivables.filter((r: Receivable) => (r.statusExibicao || r.status) !== 'PAGO').reduce((sum: number, r: Receivable) => sum + (r.saldoRestante ?? Number(r.valorParcela)), 0);
+      return acc + sale.receivables.filter((r: Receivable) => (r.statusExibicao || r.status) !== 'PAGO').reduce((sum: number, r: Receivable) => sum + saldoRestante(r), 0);
     }
     if (sale.formaPagamento === 'CREDIARIO' && sale.status === 'PENDENTE') {
       return acc + (Number(sale.valorTotalLiquido) - Number(sale.valorSinal));
@@ -773,7 +771,7 @@ export function VendasPage() {
                       <p className="text-xs font-semibold text-orange-800 uppercase tracking-wider">Parcelas do Fiado</p>
                       {selectedSale.receivables.map((r: Receivable) => {
                         const totalPago = r.valorJaPago ?? 0;
-                        const saldo = r.saldoRestante ?? (Number(r.valorParcela) - totalPago);
+                        const saldo = saldoRestante(r);
                         const status = r.statusExibicao || r.status;
                         const isQuitado = status === 'PAGO';
                         const isParcial = status === 'PAGO_PARCIAL';
@@ -809,20 +807,20 @@ export function VendasPage() {
 
       {/* Modal de Confirmação de Exclusão (sem senha) */}
       <Modal
-        open={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        closeDisabled={deleting}
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        closeDisabled={deleteTarget?.deleting}
         size="sm"
         rounded="xl"
       >
         <h3 className="text-lg font-bold text-gray-900 mb-2">🗑️ Confirmar Exclusão</h3>
         <p className="text-sm text-gray-500 mb-4">Tem certeza que deseja excluir permanentemente esta venda? O estoque será revertido e os registros financeiros serão ajustados. Esta ação não pode ser desfeita.</p>
         <div className="flex justify-end gap-3">
-          <button onClick={() => setShowDeleteModal(false)} disabled={deleting} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+          <button onClick={() => setDeleteTarget(null)} disabled={deleteTarget?.deleting} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
             Cancelar
           </button>
-          <button onClick={handleConfirmDelete} disabled={deleting} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
-            {deleting ? 'Excluindo...' : 'Confirmar Exclusão'}
+          <button onClick={handleConfirmDelete} disabled={deleteTarget?.deleting} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+            {deleteTarget?.deleting ? 'Excluindo...' : 'Confirmar Exclusão'}
           </button>
         </div>
       </Modal>

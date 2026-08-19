@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { fetchApi } from '../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, queryKeys, STALE_TIMES } from '../lib/query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTransactionForm } from '../hooks/useTransactionForm';
@@ -153,11 +153,11 @@ export function PersonalDashboardPage() {
   }, []);
 
   const q = `?mes=${mesFilter}&ano=${anoFilter}`;
-  const dashboardQ = useApiQuery<DashboardData>(['personal-dashboard', mesFilter, anoFilter], '/personal/dashboard' + q, { enabled: configLoaded });
-  const analysisQ = useApiQuery<AIAnalysis>(['personal-ai', mesFilter, anoFilter], '/personal/ai-analysis' + q, { enabled: configLoaded });
-  const transactionsQ = useApiQuery<Transaction[]>(['personal-transactions', mesFilter, anoFilter], '/personal/transactions' + q, { enabled: configLoaded });
-  const categoriesQ = useApiQuery<Category[]>(['personal-categories'], '/personal/categories', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
-  const walletsQ = useApiQuery<Wallet[]>(['personal-wallets'], '/personal/wallets', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
+  const dashboardQ = useApiQuery<DashboardData>(queryKeys.personal.dashboard(mesFilter, anoFilter), '/personal/dashboard' + q, { enabled: configLoaded });
+  const analysisQ = useApiQuery<AIAnalysis>(queryKeys.personal.aiAnalysis(mesFilter, anoFilter), '/personal/ai-analysis' + q, { enabled: configLoaded });
+  const transactionsQ = useApiQuery<Transaction[]>(queryKeys.personal.transactions(mesFilter, anoFilter), '/personal/transactions' + q, { enabled: configLoaded });
+  const categoriesQ = useApiQuery<Category[]>(queryKeys.personal.categories(), '/personal/categories', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
+  const walletsQ = useApiQuery<Wallet[]>(queryKeys.personal.wallets(), '/personal/wallets', { enabled: configLoaded, staleTime: STALE_TIMES.STATIC });
 
   // Estado derivado: fallback zerado quando o fetch falha (comportamento anterior)
   const dashboard = dashboardQ.data ?? (dashboardQ.isError ? EMPTY_DASH : null);

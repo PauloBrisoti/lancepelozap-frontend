@@ -22,7 +22,8 @@ vi.mock('../lib/query', () => ({
 
 const mockUser = { id: 'u1', nome: 'PJ User', role: 'USER' };
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: mockUser, activeStoreId: 'store-1', activeWorkspace: { id: 'store-1', tipo: 'PJ' }, loading: false, isAuthenticated: true }),
+  useAuthUser: () => ({ user: mockUser, activeWorkspace: { id: 'store-1', tipo: 'PJ' }, loading: false, isAuthenticated: true }),
+  useAuthStore: () => ({ activeStoreId: 'store-1' }),
 }));
 
 const consolidatedData = {

@@ -4,12 +4,12 @@ import toast from 'react-hot-toast';
 import { formatDateBR, formatDateTimeBR } from '../lib/dates';
 import { Modal } from '../components/Modal';
 import { StatusActions } from '../components/StatusActions';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, useCustomers, useProducts, queryKeys, STALE_TIMES } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
 import { formatBRL } from '../utils/format';
 import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_STATUS_COLORS } from '../utils/domainMaps';
 
 interface Customer { id: string; nomeCompleto: string; telefoneWhatsapp: string; }
-interface Product { id: string; nome: string; qtdEstoqueAtual: number; precoVendaSugerido: number; }
 interface ServiceType { id: string; nome: string; descricao: string; precoPadrao: number; tempoEstimado: number | null; categoria: string; ativo: boolean; }
 
 interface OsItem {
@@ -35,6 +35,7 @@ interface ServiceOrder {
 
 
 export function OrdemServicoPage() {
+  const { activeStoreId } = useAuthStore();
   const [filter, setFilter] = useState('');
 
   const [modal, setModal] = useState<'criar' | 'detalhe' | null>(null);
@@ -46,22 +47,14 @@ export function OrdemServicoPage() {
   const [formItems, setFormItems] = useState<OsItem[]>([]);
 
   const { data: orders = [], isLoading, refetch: refetchOrders } = useApiQuery<ServiceOrder[]>(
-    ['service-orders'],
+    queryKeys.serviceOrders(activeStoreId),
     '/service-orders',
     { staleTime: STALE_TIMES.NORMAL }
   );
-  const { data: customers = [] } = useApiQuery<Customer[]>(
-    ['customers'],
-    '/customers',
-    { staleTime: STALE_TIMES.NORMAL }
-  );
-  const { data: products = [] } = useApiQuery<Product[]>(
-    ['products', 'ativos'],
-    '/products?status=ATIVO',
-    { staleTime: STALE_TIMES.NORMAL }
-  );
+  const { data: customers = [] } = useCustomers(activeStoreId);
+  const { data: products = [] } = useProducts(activeStoreId, 'ATIVO');
   const { data: serviceTypes = [] } = useApiQuery<ServiceType[]>(
-    ['service-orders', 'service-types'],
+    [...queryKeys.serviceOrders(activeStoreId), 'service-types'],
     '/service-orders/service-types',
     { staleTime: STALE_TIMES.STATIC }
   );

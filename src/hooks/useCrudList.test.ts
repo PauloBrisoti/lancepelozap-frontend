@@ -12,6 +12,16 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => mockQueryClient,
+}));
+
+const mockQueryClient = { invalidateQueries: vi.fn() };
+
+vi.mock('../lib/query', () => ({
+  useApiQuery: () => ({ data: undefined, isLoading: false }),
+}));
+
 interface Item { id: string; nome: string }
 
 function setup() {

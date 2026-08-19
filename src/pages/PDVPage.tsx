@@ -1,12 +1,13 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect, useMemo, useRef, useCallback, useEffectEvent } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
-import { STALE_TIMES } from '../lib/query';
+import { STALE_TIMES, useCustomers, usePaymentFees } from '../lib/query';
 import { todayLocalDate, formatBRL } from '../utils/format';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useSaleDraft } from '../hooks/useSaleDraft';
 import { queueSale } from '../services/offlineSales';
 import { cacheProducts, getCachedProducts } from '../services/offlineProducts';
 
@@ -35,7 +36,7 @@ interface CartItem {
 
 export const PDVPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { activeStoreId } = useAuth();
+  const { activeStoreId } = useAuthStore();
   const isOnline = useOnlineStatus();
   const offlineCacheRef = useRef(false);
 
@@ -62,18 +63,8 @@ export const PDVPage: React.FC = () => {
     staleTime: STALE_TIMES.FREQUENT,
     retry: 2,
   });
-  const clientesQ = useQuery<Customer[]>({
-    queryKey: ['customers', activeStoreId],
-    queryFn: ({ signal }) => fetchApi<Customer[]>('/customers', { signal }),
-    staleTime: STALE_TIMES.FREQUENT,
-    retry: 2,
-  });
-  const feesQ = useQuery<any[]>({
-    queryKey: ['payment-fees', activeStoreId],
-    queryFn: ({ signal }) => fetchApi<any[]>('/payment-fees', { signal }).catch(() => []),
-    staleTime: STALE_TIMES.STATIC,
-    retry: 0,
-  });
+  const clientesQ = useCustomers<Customer>(activeStoreId);
+  const feesQ = usePaymentFees(activeStoreId);
 
   const produtos = produtosQ.data ?? [];
   const clientes = clientesQ.data ?? [];
@@ -83,17 +74,10 @@ export const PDVPage: React.FC = () => {
   
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [busca, setBusca] = useState('');
-  const [clienteId, setClienteId] = useState('');
-  const [formaPagamento, setFormaPagamento] = useState('PIX');
-  const [desconto, setDesconto] = useState(0);
-  const [acrescimo, setAcrescimo] = useState(0);
-  const [sinal, setSinal] = useState(0);
-  const [parcelas, setParcelas] = useState(1);
+  const { venda, setVendaField, resetVenda } = useSaleDraft();
   const [saving, setSaving] = useState(false);
   const [itemEmEdicao, setItemEmEdicao] = useState<CartItem | null>(null);
   const [cartAberto, setCartAberto] = useState(false);
-  const [dataVenda, setDataVenda] = useState(() => todayLocalDate());
-  const [repasseTaxa, setRepasseTaxa] = useState(false);
 
   const [scannerAberto, setScannerAberto] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -286,7 +270,7 @@ export const PDVPage: React.FC = () => {
       return { taxaPercentual: 0, taxaFixa: 0, valorTaxa: 0 };
     }
     const fee = paymentFees.find(
-      (f: { formaPagamento: string; parcelas: number }) => f.formaPagamento === formaPagamento && f.parcelas === Number(parcelas)
+      (f: { formaPagamento: string; parcelas: number }) => f.formaPagamento === venda.formaPagamento && f.parcelas === Number(venda.parcelas)
     );
     if (!fee) return { taxaPercentual: 0, taxaFixa: 0, valorTaxa: 0 };
     const valorPercentual = (subtotal * Number(fee.taxaPercentual)) / 100;
@@ -296,13 +280,13 @@ export const PDVPage: React.FC = () => {
       taxaFixa: valorFixo,
       valorTaxa: Math.max(0, valorPercentual + valorFixo),
     };
-  }, [paymentFees, formaPagamento, parcelas, subtotal]);
+  }, [paymentFees, venda.formaPagamento, venda.parcelas, subtotal]);
 
-  const total = Math.max(0, subtotal - Number(desconto || 0) + Number(acrescimo || 0) + (repasseTaxa ? feeInfo.valorTaxa : 0));
+  const total = Math.max(0, subtotal - Number(venda.desconto || 0) + Number(venda.acrescimo || 0) + (venda.repasseTaxa ? feeInfo.valorTaxa : 0));
 
   const finalizarVenda = async (): Promise<void> => {
     if (carrinho.length === 0) { toast('Adicione itens ao carrinho.'); return; }
-    if (formaPagamento === 'CREDIARIO' && !clienteId) {
+    if (venda.formaPagamento === 'CREDIARIO' && !venda.clienteId) {
       toast('Selecione um cliente para vendas no Crediário.');
       return;
     }
@@ -311,19 +295,19 @@ export const PDVPage: React.FC = () => {
     try {
       const agora = new Date();
       const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-      const dataVendaEnvio = dataVenda === todayLocalDate()
-        ? `${dataVenda}T${horaAtual}`
-        : dataVenda;
+      const dataVendaEnvio = venda.dataVenda === todayLocalDate()
+        ? `${venda.dataVenda}T${horaAtual}`
+        : venda.dataVenda;
 
       const body = {
-        customerId: clienteId || undefined,
+        customerId: venda.clienteId || undefined,
         itens: carrinho,
-        formaPagamento,
-        valorDesconto: Number(desconto),
-        valorAcrescimo: Number(acrescimo),
-        valorSinal: Number(sinal),
-        numeroParcelas: Number(parcelas),
-        repasseTaxa,
+        formaPagamento: venda.formaPagamento,
+        valorDesconto: Number(venda.desconto),
+        valorAcrescimo: Number(venda.acrescimo),
+        valorSinal: Number(venda.sinal),
+        numeroParcelas: Number(venda.parcelas),
+        repasseTaxa: venda.repasseTaxa,
         dataVenda: dataVendaEnvio || undefined
       };
 
@@ -331,18 +315,13 @@ export const PDVPage: React.FC = () => {
         await queueSale(body);
         toast.success('Venda salva offline! Será sincronizada automaticamente.');
         setCarrinho([]);
-        setDesconto(0);
-        setAcrescimo(0);
-        setSinal(0);
-        setParcelas(1);
-        setClienteId('');
-        setDataVenda(todayLocalDate());
+        resetVenda();
         setCartAberto(false);
         setSaving(false);
         return;
       }
 
-      const clienteSelecionado = clientes.find(c => c.id === clienteId);
+      const clienteSelecionado = clientes.find(c => c.id === venda.clienteId);
 
       await fetchApi('/sales', {
         method: 'POST',
@@ -352,20 +331,15 @@ export const PDVPage: React.FC = () => {
       setVendaFinalizada({
         itens: [...carrinho],
         total,
-        formaPagamento,
+        formaPagamento: venda.formaPagamento,
         valorTaxa: feeInfo.valorTaxa,
-        repasseTaxa,
+        repasseTaxa: venda.repasseTaxa,
         clienteNome: clienteSelecionado?.nomeCompleto || 'Consumidor Final',
         clienteTelefone: clienteSelecionado?.telefoneWhatsapp || ''
       });
 
       setCarrinho([]);
-      setDesconto(0);
-      setAcrescimo(0);
-      setSinal(0);
-      setParcelas(1);
-      setClienteId('');
-      setDataVenda(todayLocalDate());
+      resetVenda();
       setCartAberto(false);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
@@ -474,26 +448,12 @@ export const PDVPage: React.FC = () => {
           setItemEmEdicao={setItemEmEdicao}
           subtotal={subtotal}
           total={total}
-          desconto={desconto}
-          setDesconto={setDesconto}
-          acrescimo={acrescimo}
-          setAcrescimo={setAcrescimo}
-          formaPagamento={formaPagamento}
-          setFormaPagamento={setFormaPagamento}
-          clienteId={clienteId}
-          setClienteId={setClienteId}
+          venda={venda}
+          setVendaField={setVendaField}
           clientes={clientes}
-          sinal={sinal}
-          setSinal={setSinal}
-          parcelas={parcelas}
-          setParcelas={setParcelas}
           saving={saving}
           finalizarVenda={finalizarVenda}
           feeInfo={feeInfo}
-          dataVenda={dataVenda}
-          setDataVenda={setDataVenda}
-          repasseTaxa={repasseTaxa}
-          setRepasseTaxa={setRepasseTaxa}
         />
       </div>
 
@@ -548,26 +508,12 @@ export const PDVPage: React.FC = () => {
                 setItemEmEdicao={setItemEmEdicao}
                 subtotal={subtotal}
                 total={total}
-                desconto={desconto}
-                setDesconto={setDesconto}
-                acrescimo={acrescimo}
-                setAcrescimo={setAcrescimo}
-                formaPagamento={formaPagamento}
-                setFormaPagamento={setFormaPagamento}
-                clienteId={clienteId}
-                setClienteId={setClienteId}
+                venda={venda}
+                setVendaField={setVendaField}
                 clientes={clientes}
-                sinal={sinal}
-                setSinal={setSinal}
-                parcelas={parcelas}
-                setParcelas={setParcelas}
                 saving={saving}
                 finalizarVenda={finalizarVenda}
                 feeInfo={feeInfo}
-                dataVenda={dataVenda}
-                setDataVenda={setDataVenda}
-                repasseTaxa={repasseTaxa}
-                setRepasseTaxa={setRepasseTaxa}
               />
             </div>
           </div>
@@ -756,36 +702,18 @@ interface CartContentProps {
   setItemEmEdicao: (item: CartItem | null) => void;
   subtotal: number;
   total: number;
-  desconto: number;
-  setDesconto: (v: number) => void;
-  acrescimo: number;
-  setAcrescimo: (v: number) => void;
-  formaPagamento: string;
-  setFormaPagamento: (v: string) => void;
-  clienteId: string;
-  setClienteId: (v: string) => void;
+  venda: SaleDraft;
+  setVendaField: (field: SaleDraftField, value: string | number | boolean) => void;
   clientes: Customer[];
-  sinal: number;
-  setSinal: (v: number) => void;
-  parcelas: number;
-  setParcelas: (v: number) => void;
   saving: boolean;
   finalizarVenda: () => Promise<void>;
   feeInfo: { taxaPercentual: number; taxaFixa: number; valorTaxa: number };
-  dataVenda: string;
-  setDataVenda: (v: string) => void;
-  repasseTaxa: boolean;
-  setRepasseTaxa: (v: boolean) => void;
 }
 
 function CartContent({
   carrinho, alterarQuantidade, removerDoCarrinho, setItemEmEdicao,
-  subtotal, total, desconto, setDesconto, acrescimo, setAcrescimo,
-  formaPagamento, setFormaPagamento,
-  clienteId, setClienteId, clientes,
-  sinal, setSinal, parcelas, setParcelas,
-  saving, finalizarVenda, feeInfo, dataVenda, setDataVenda,
-  repasseTaxa, setRepasseTaxa,
+  subtotal, total, venda, setVendaField, clientes,
+  saving, finalizarVenda, feeInfo,
 }: CartContentProps) {
   return (
     <>
@@ -832,22 +760,22 @@ function CartContent({
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Data da Venda</label>
-          <input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)}
+          <input type="date" value={venda.dataVenda} onChange={e => setVendaField('dataVenda', e.target.value)}
             className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" />
         </div>
         
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">Desconto (R$)</label>
-            <input type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={desconto === 0 ? '' : desconto} onChange={e => setDesconto(e.target.value === '' ? 0 : Number(e.target.value))} />
+            <input type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={venda.desconto === 0 ? '' : venda.desconto} onChange={e => setVendaField('desconto', e.target.value === '' ? 0 : Number(e.target.value))} />
           </div>
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">Acréscimo (R$)</label>
-            <input type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={acrescimo === 0 ? '' : acrescimo} onChange={e => setAcrescimo(e.target.value === '' ? 0 : Number(e.target.value))} />
+            <input type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={venda.acrescimo === 0 ? '' : venda.acrescimo} onChange={e => setVendaField('acrescimo', e.target.value === '' ? 0 : Number(e.target.value))} />
           </div>
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">Pagamento</label>
-            <select className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm font-medium" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
+            <select className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm font-medium" value={venda.formaPagamento} onChange={e => setVendaField('formaPagamento', e.target.value)}>
               <option value="PIX">Pix</option>
               <option value="CARTAO_CREDITO">Cartão Crédito</option>
               <option value="CARTAO_DEBITO">Cartão Débito</option>
@@ -859,39 +787,39 @@ function CartContent({
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-500">Vincular Cliente</label>
-          <select className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" value={clienteId} onChange={e => setClienteId(e.target.value)}>
+          <select className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" value={venda.clienteId} onChange={e => setVendaField('clienteId', e.target.value)}>
             <option value="">Consumidor Final</option>
             {clientes.map(c => <option key={c.id} value={c.id}>{c.nomeCompleto}</option>)}
           </select>
         </div>
 
-        {(formaPagamento === 'CREDIARIO' || formaPagamento === 'CARTAO_CREDITO') && (
+        {(venda.formaPagamento === 'CREDIARIO' || venda.formaPagamento === 'CARTAO_CREDITO') && (
           <div className="flex flex-col gap-2 p-3 bg-brand-50 border border-brand-100 rounded-lg">
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-xs font-medium text-brand-700 mb-1">Sinal / Entrada (R$)</label>
-                <input type="number" min="0" max={total} step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-white border border-brand-200 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={sinal === 0 ? '' : sinal} onChange={e => setSinal(e.target.value === '' ? 0 : Number(e.target.value))} />
+                <input type="number" min="0" max={total} step="0.01" placeholder="0,00" className="w-full px-3 py-3 bg-white border border-brand-200 rounded-lg text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={venda.sinal === 0 ? '' : venda.sinal} onChange={e => setVendaField('sinal', e.target.value === '' ? 0 : Number(e.target.value))} />
               </div>
               <div className="flex-1">
                 <label className="block text-xs font-medium text-brand-700 mb-1">Parcelas</label>
-                <select className="w-full px-3 py-3 bg-white border border-brand-200 rounded-lg text-sm" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                <select className="w-full px-3 py-3 bg-white border border-brand-200 rounded-lg text-sm" value={venda.parcelas} onChange={e => setVendaField('parcelas', Number(e.target.value))}>
                   {[1, 2, 3, 4, 5, 6, 10, 12].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
               </div>
             </div>
             <div className="text-xs text-brand-800 bg-brand-100 p-2 rounded flex justify-between font-medium mt-1">
               <span>Total: {formatBRL(total)}</span>
-              {formaPagamento === 'CREDIARIO' ? (
-                <span>Fiado: R$ {Math.max(0, total - sinal).toFixed(2)}</span>
+              {venda.formaPagamento === 'CREDIARIO' ? (
+                <span>Fiado: R$ {Math.max(0, total - venda.sinal).toFixed(2)}</span>
               ) : (
-                <span>Saldo no Cartão: R$ {Math.max(0, total - sinal).toFixed(2)}</span>
+                <span>Saldo no Cartão: R$ {Math.max(0, total - venda.sinal).toFixed(2)}</span>
               )}
             </div>
             <div className="text-xs text-gray-600 bg-white p-2 rounded border border-brand-100">
-              {parcelas > 1
-                ? `${parcelas}x de R$ ${Math.max(0, (total - sinal) / parcelas).toFixed(2)}${sinal > 0 ? ` (+ R$ ${sinal.toFixed(2)} de entrada)` : ''}`
-                : sinal > 0
-                  ? `Entrada de R$ ${sinal.toFixed(2)}, saldo restante R$ ${Math.max(0, total - sinal).toFixed(2)}`
+              {venda.parcelas > 1
+                ? `${venda.parcelas}x de R$ ${Math.max(0, (total - venda.sinal) / venda.parcelas).toFixed(2)}${venda.sinal > 0 ? ` (+ R$ ${venda.sinal.toFixed(2)} de entrada)` : ''}`
+                : venda.sinal > 0
+                  ? `Entrada de R$ ${venda.sinal.toFixed(2)}, saldo restante R$ ${Math.max(0, total - venda.sinal).toFixed(2)}`
                   : 'Pagamento à vista'
               }
             </div>
@@ -903,15 +831,15 @@ function CartContent({
         {feeInfo.valorTaxa > 0 && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-orange-700 font-medium">Taxa ({formaPagamento === 'CARTAO_CREDITO' ? `${parcelas}x ` : ''}{feeInfo.taxaPercentual}%{feeInfo.taxaFixa > 0 ? ` + R$ ${feeInfo.taxaFixa.toFixed(2)}` : ''})</span>
-              <span className="text-orange-600 font-semibold">{repasseTaxa ? 'R$ 0,00' : `- R$ ${feeInfo.valorTaxa.toFixed(2)}`}</span>
+              <span className="text-orange-700 font-medium">Taxa ({venda.formaPagamento === 'CARTAO_CREDITO' ? `${venda.parcelas}x ` : ''}{feeInfo.taxaPercentual}%{feeInfo.taxaFixa > 0 ? ` + R$ ${feeInfo.taxaFixa.toFixed(2)}` : ''})</span>
+              <span className="text-orange-600 font-semibold">{venda.repasseTaxa ? 'R$ 0,00' : `- R$ ${feeInfo.valorTaxa.toFixed(2)}`}</span>
             </div>
             <div className="flex justify-between items-center text-xs text-orange-600">
-              <span>{repasseTaxa ? 'Taxa repassada ao cliente' : 'Valor líquido (após taxas)'}</span>
-              <span className="font-bold">R$ {Math.max(0, total - (repasseTaxa ? 0 : feeInfo.valorTaxa)).toFixed(2)}</span>
+              <span>{venda.repasseTaxa ? 'Taxa repassada ao cliente' : 'Valor líquido (após taxas)'}</span>
+              <span className="font-bold">R$ {Math.max(0, total - (venda.repasseTaxa ? 0 : feeInfo.valorTaxa)).toFixed(2)}</span>
             </div>
             <label className="flex items-center gap-2 pt-2 border-t border-orange-200 text-xs text-gray-700 cursor-pointer select-none">
-              <input type="checkbox" checked={repasseTaxa} onChange={e => setRepasseTaxa(e.target.checked)} />
+              <input type="checkbox" checked={venda.repasseTaxa} onChange={e => setVendaField('repasseTaxa', e.target.checked)} />
               Repassar taxa ao cliente (acrescentar ao total)
             </label>
           </div>

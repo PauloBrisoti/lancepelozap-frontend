@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
+import { useStoreDashboardConfig } from '../lib/query';
 import type { Sale } from '../types/api';
 
 export interface Wallet {
@@ -196,11 +197,11 @@ export function useFinanceiroDashboard({ activeStoreId, activeTab, queryParams }
     }
   }, [activeTab, queryParams]);
 
+  const storeCfg = useStoreDashboardConfig(activeStoreId);
+
   useEffect(() => {
-    fetchApi(`/store/my/${activeStoreId}/dashboard-config`).then((res: any) => {
-      if (res?.cards) setDashboardCards(res.cards);
-    }).catch(() => {});
-  }, [activeStoreId]);
+    if (storeCfg.data?.cards) setDashboardCards(storeCfg.data.cards);
+  }, [storeCfg.data]);
 
   useEffect(() => {
     setLoading(true);

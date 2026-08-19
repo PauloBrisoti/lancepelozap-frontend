@@ -15,7 +15,8 @@ function renderWithQuery(ui: React.ReactElement) {
 
 const mockUser = { id: 'u1', nome: 'Tenant User', role: 'USER' };
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: mockUser, activeStoreId: 'store-1', activeWorkspace: { id: 'store-1', tipo: 'PJ' }, loading: false, isAuthenticated: true }),
+  useAuthUser: () => ({ user: mockUser, activeWorkspace: { id: 'store-1', tipo: 'PJ' }, loading: false, isAuthenticated: true }),
+  useAuthStore: () => ({ activeStoreId: 'store-1' }),
 }));
 
 vi.mock('../hooks/useStockAlerts', () => ({

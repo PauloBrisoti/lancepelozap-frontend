@@ -12,8 +12,19 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => mockQueryClient,
+}));
+
+const mockQueryClient = { invalidateQueries: vi.fn() };
+
+vi.mock('../lib/query', () => ({
+  useApiQuery: () => ({ data: undefined, isLoading: false }),
+}));
+
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ activeStoreId: 'store-1', user: { id: 'u1', role: 'USER' }, loading: false, isAuthenticated: true }),
+  useAuthUser: () => ({ user: { id: 'u1', role: 'USER' }, loading: false, isAuthenticated: true }),
+  useAuthStore: () => ({ activeStoreId: 'store-1' }),
 }));
 
 let mockAlertData = { count: 0, products: [] as Array<{ id: string; nome: string; qtdEstoqueAtual: number; estoqueMinimo: number }> };

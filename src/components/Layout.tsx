@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 import { Sidebar } from './Sidebar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { NotificationBell } from './NotificationBell';
@@ -9,7 +9,8 @@ import { TrialBanner } from './TrialBanner';
 
 export function Layout() {
   const navigate = useNavigate();
-  const { logout, revertImpersonate, user, isPf } = useAuth();
+  const { user, isPf } = useAuthUser();
+  const { logout, revertImpersonate } = useAuthActions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {

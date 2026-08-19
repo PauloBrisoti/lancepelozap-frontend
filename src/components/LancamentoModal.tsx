@@ -1,10 +1,13 @@
-import { type FormEvent, type ReactNode } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { fetchApi } from '../lib/api';
+import { useAuthStore } from '../context/AuthContext';
 import { Modal } from './Modal';
 import { formatDateBR } from '../lib/dates';
 import { formatBRL } from '../utils/format';
-import { useApiQuery, STALE_TIMES, useWallets } from '../lib/query';
-import type { Customer, FinancialCategory } from '../hooks/useFinanceiroDashboard';
+import { useApiQuery, useCustomers, STALE_TIMES, useWallets } from '../lib/query';
+import type { FinancialCategory } from '../hooks/useFinanceiroDashboard';
 
 export interface LancamentoForm {
   id: string;
@@ -41,53 +44,52 @@ type TipoLancamento = 'RECEITA' | 'DESPESA_VISTA' | 'CONTA_PAGAR';
 interface Props {
   open: boolean;
   onClose: () => void;
-  activeStoreId: string | null;
-  tipoLancamento: TipoLancamento;
-  onTipoLancamentoChange: (tipo: TipoLancamento) => void;
-  formTx: LancamentoForm;
-  setFormTx: (form: LancamentoForm) => void;
-  formPayable: PayableForm;
-  setFormPayable: (form: PayableForm) => void;
-  onSubmitTx: (e: FormEvent) => void;
-  onSubmitPayable: (e: FormEvent) => void;
-  onCriarCategoria: (tipo: 'ENTRADA' | 'SAIDA') => Promise<void>;
-  /** Modo "criar categoria" ativo (estado vem do container via useFinanceiroModals) */
-  criarCategoriaAberto: boolean;
-  novaCategoriaNome: string;
-  setNovaCategoriaNome: (nome: string) => void;
-  abrirCriarCategoria: () => void;
-  cancelarCriarCategoria: () => void;
+  /** Tipo inicial para um lançamento novo (na edição, o tipo vem do próprio registro) */
+  tipoInicial: TipoLancamento;
+  /** Lançamento a editar (null = novo) */
+  initialTx: LancamentoForm | null;
+  /** Conta a pagar a editar (null = novo) */
+  initialPayable: PayableForm | null;
+  onSubmitTx: (payload: LancamentoForm) => void;
+  onSubmitPayable: (payload: PayableForm) => void;
+}
+
+const EMPTY_PAYABLE: PayableForm = { id: '', descricao: '', categoria: '', fornecedor: '', dataVencimento: '', valor: '', isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: false };
+
+function makeEmptyTx(tipo: 'ENTRADA' | 'SAIDA'): LancamentoForm {
+  const tzoffset = new Date().getTimezoneOffset() * 60000;
+  return {
+    id: '', tipo, valor: '', descricao: '', walletId: '', categoria: '',
+    dataTransacao: new Date(Date.now() - tzoffset).toISOString().slice(0, 16),
+    customerId: '', fornecedor: '',
+    isParcelado: false, numeroParcelas: 2, frequencia: 'MENSAL', isFirstPaid: true,
+    comprovante: null
+  };
 }
 
 /** Modal unificado de lançamento: Receita / Despesa à Vista / Conta a Pagar */
 export function LancamentoModal({
   open,
   onClose,
-  activeStoreId,
-  tipoLancamento,
-  onTipoLancamentoChange,
-  formTx,
-  setFormTx,
-  formPayable,
-  setFormPayable,
+  tipoInicial,
+  initialTx,
+  initialPayable,
   onSubmitTx,
   onSubmitPayable,
-  onCriarCategoria,
-  criarCategoriaAberto,
-  novaCategoriaNome,
-  setNovaCategoriaNome,
-  abrirCriarCategoria,
-  cancelarCriarCategoria,
 }: Props) {
   const queryClient = useQueryClient();
+  const { activeStoreId } = useAuthStore();
+
+  // Estado próprio do modal: formulários, tipo e "criar categoria" vivem aqui
+  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>(tipoInicial);
+  const [formTx, setFormTx] = useState<LancamentoForm>(() => makeEmptyTx('SAIDA'));
+  const [formPayable, setFormPayable] = useState<PayableForm>(EMPTY_PAYABLE);
+  const [novaCategoriaAberto, setNovaCategoriaAberto] = useState(false);
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
 
   // Dados próprios do modal (carteiras, clientes, categorias) via cache React Query
   const walletsQ = useWallets(activeStoreId, open);
-  const customersQ = useApiQuery<Customer[]>(
-    ['customers', activeStoreId],
-    '/customers',
-    { staleTime: STALE_TIMES.NORMAL, enabled: open }
-  );
+  const customersQ = useCustomers(activeStoreId, open);
   const categoriesQ = useApiQuery<FinancialCategory[]>(
     ['finance-categories', activeStoreId],
     '/finance/categories',
@@ -97,9 +99,91 @@ export function LancamentoModal({
   const customers = customersQ.data ?? [];
   const categories = categoriesQ.data ?? [];
 
+  // Reset do formulário a cada abertura (novo ou edição)
+  useEffect(() => {
+    if (!open) return;
+    if (initialTx?.id) {
+      setTipoLancamento(initialTx.tipo === 'ENTRADA' ? 'RECEITA' : 'DESPESA_VISTA');
+      setFormTx(initialTx);
+      setFormPayable(EMPTY_PAYABLE);
+    } else if (initialPayable?.id) {
+      setTipoLancamento('CONTA_PAGAR');
+      setFormPayable(initialPayable);
+      setFormTx(makeEmptyTx('SAIDA'));
+    } else {
+      setTipoLancamento(tipoInicial);
+      setFormTx(makeEmptyTx(tipoInicial === 'RECEITA' ? 'ENTRADA' : 'SAIDA'));
+      setFormPayable(EMPTY_PAYABLE);
+    }
+    setNovaCategoriaAberto(false);
+    setNovaCategoriaNome('');
+  }, [open, initialTx, initialPayable, tipoInicial]);
+
+  // Pré-seleciona a primeira carteira em lançamentos novos quando as carteiras carregam
+  useEffect(() => {
+    if (!open || tipoLancamento === 'CONTA_PAGAR' || formTx.id) return;
+    if (wallets.length > 0 && !formTx.walletId) {
+      setFormTx(prev => ({ ...prev, walletId: wallets[0].id }));
+    }
+  }, [open, wallets, formTx.walletId, formTx.id, tipoLancamento]);
+
+  const handleTipoLancamentoChange = (tipo: TipoLancamento) => {
+    setTipoLancamento(tipo);
+    setNovaCategoriaAberto(false);
+    setNovaCategoriaNome('');
+    if (tipo === 'CONTA_PAGAR') {
+      setFormPayable(EMPTY_PAYABLE);
+    } else {
+      setFormTx(prev => ({
+        ...prev,
+        id: '',
+        tipo: tipo === 'RECEITA' ? 'ENTRADA' : 'SAIDA',
+        descricao: '',
+        valor: '',
+        categoria: '',
+        customerId: '',
+        fornecedor: '',
+        dataTransacao: makeEmptyTx('ENTRADA').dataTransacao,
+        isParcelado: false,
+        numeroParcelas: 2,
+      }));
+    }
+  };
+
+  const cancelarNovaCategoria = () => {
+    setNovaCategoriaAberto(false);
+    setNovaCategoriaNome('');
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (tipoLancamento === 'CONTA_PAGAR') {
+      onSubmitPayable(formPayable);
+    } else {
+      onSubmitTx(formTx);
+    }
+  };
+
   const handleCriarCategoria = async (tipo: 'ENTRADA' | 'SAIDA') => {
-    await onCriarCategoria(tipo);
-    queryClient.invalidateQueries({ queryKey: ['finance-categories', activeStoreId] });
+    if (!novaCategoriaNome.trim()) return;
+    try {
+      await fetchApi('/finance/categories', {
+        method: 'POST',
+        body: JSON.stringify({ nome: novaCategoriaNome.trim(), tipo }),
+      });
+      if (tipoLancamento === 'CONTA_PAGAR') {
+        setFormPayable(prev => ({ ...prev, categoria: novaCategoriaNome.trim() }));
+      } else {
+        setFormTx(prev => ({ ...prev, categoria: novaCategoriaNome.trim() }));
+      }
+      setNovaCategoriaAberto(false);
+      setNovaCategoriaNome('');
+      toast.success('Categoria criada!');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao criar categoria');
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['finance-categories', activeStoreId] });
+    }
   };
 
   return (
@@ -112,14 +196,14 @@ export function LancamentoModal({
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
-      <form onSubmit={tipoLancamento === 'CONTA_PAGAR' ? onSubmitPayable : onSubmitTx} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
 
         {/* ─── SELETOR DE TIPO ─── */}
         {!formTx.id && !formPayable.id && (
           <div className="grid grid-cols-3 gap-2">
-            <TipoButton active={tipoLancamento === 'RECEITA'} activeClass="bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm" onClick={() => onTipoLancamentoChange('RECEITA')} iconPath="M12 6v6m0 0v6m0-6h6m-6 0H6" label="Receita" />
-            <TipoButton active={tipoLancamento === 'DESPESA_VISTA'} activeClass="bg-red-50 border-red-500 text-red-700 shadow-sm" onClick={() => onTipoLancamentoChange('DESPESA_VISTA')} iconPath="M20 12H4" label="Despesa à Vista" />
-            <TipoButton active={tipoLancamento === 'CONTA_PAGAR'} activeClass="bg-orange-50 border-orange-500 text-orange-700 shadow-sm" onClick={() => onTipoLancamentoChange('CONTA_PAGAR')} iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" label="Conta a Pagar" />
+            <TipoButton active={tipoLancamento === 'RECEITA'} activeClass="bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm" onClick={() => handleTipoLancamentoChange('RECEITA')} iconPath="M12 6v6m0 0v6m0-6h6m-6 0H6" label="Receita" />
+            <TipoButton active={tipoLancamento === 'DESPESA_VISTA'} activeClass="bg-red-50 border-red-500 text-red-700 shadow-sm" onClick={() => handleTipoLancamentoChange('DESPESA_VISTA')} iconPath="M20 12H4" label="Despesa à Vista" />
+            <TipoButton active={tipoLancamento === 'CONTA_PAGAR'} activeClass="bg-orange-50 border-orange-500 text-orange-700 shadow-sm" onClick={() => handleTipoLancamentoChange('CONTA_PAGAR')} iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" label="Conta a Pagar" />
           </div>
         )}
 
@@ -148,11 +232,11 @@ export function LancamentoModal({
                   tipo={formTx.tipo}
                   value={formTx.categoria}
                   onChange={v => setFormTx({ ...formTx, categoria: v })}
-                  aberto={criarCategoriaAberto}
+                  aberto={novaCategoriaAberto}
                   nome={novaCategoriaNome}
                   setNome={setNovaCategoriaNome}
-                  abrir={abrirCriarCategoria}
-                  cancelar={cancelarCriarCategoria}
+                  abrir={() => setNovaCategoriaAberto(true)}
+                  cancelar={cancelarNovaCategoria}
                   confirmar={() => handleCriarCategoria(formTx.tipo as 'ENTRADA' | 'SAIDA')}
                 />
               </div>
@@ -234,11 +318,11 @@ export function LancamentoModal({
                   tipo="SAIDA"
                   value={formPayable.categoria}
                   onChange={v => setFormPayable({ ...formPayable, categoria: v })}
-                  aberto={criarCategoriaAberto}
+                  aberto={novaCategoriaAberto}
                   nome={novaCategoriaNome}
                   setNome={setNovaCategoriaNome}
-                  abrir={abrirCriarCategoria}
-                  cancelar={cancelarCriarCategoria}
+                  abrir={() => setNovaCategoriaAberto(true)}
+                  cancelar={cancelarNovaCategoria}
                   confirmar={() => handleCriarCategoria('SAIDA')}
                 />
               </div>

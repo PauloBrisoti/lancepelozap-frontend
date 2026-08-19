@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import type { Announcement } from '../types/api';
 
 const STORAGE_KEY = '@LancePeloZap:dismissedAnnouncements';
@@ -11,7 +11,7 @@ const STORAGE_KEY = '@LancePeloZap:dismissedAnnouncements';
  * do componente de banner.
  */
 export function useAnnouncements() {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../context/AuthContext';
 import { useApiQuery, STALE_TIMES, useProducts, useCustomers } from '../lib/query';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
@@ -17,7 +17,7 @@ import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../utils/domainMaps';
 interface QuoteItemForm { productId: string; nome: string; quantidade: number; precoUnitario: number; }
 
 export function OrcamentosPage() {
-  const { activeStoreId } = useAuth();
+  const { activeStoreId } = useAuthStore();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const modal = useModal();

@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { fetchApi, ApiError } from '../lib/api';
 import { formatDateBR } from '../lib/dates';
 import { Modal } from '../components/Modal';
@@ -28,7 +28,7 @@ interface PublicPlan {
 }
 
 export function PlanosPage() {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const [modalTermosAberto, setModalTermosAberto] = useState(false);
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';

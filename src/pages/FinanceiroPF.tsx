@@ -5,7 +5,7 @@ import { ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { formatDateBR } from '../lib/dates';
 import { Modal } from '../components/Modal';
 import { useModal } from '../hooks/useModal';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, queryKeys, STALE_TIMES } from '../lib/query';
 import { formatBRL } from '../utils/format';
 
 interface Category {
@@ -61,22 +61,22 @@ export function FinanceiroPF() {
   const [formTx, setFormTx] = useState(INITIAL_FORM);
 
   const { data: categories = [], refetch: refetchDados } = useApiQuery<Category[]>(
-    ['personal', 'categories'],
+    queryKeys.personal.categories(),
     '/personal/categories',
     { staleTime: STALE_TIMES.NORMAL }
   );
   const { data: wallets = [] } = useApiQuery<Wallet[]>(
-    ['personal', 'wallets'],
+    queryKeys.personal.wallets(),
     '/personal/wallets',
     { staleTime: STALE_TIMES.NORMAL }
   );
   const { data: txsData, isLoading, refetch: refetchTx } = useApiQuery<Transaction[]>(
-    ['personal', 'transactions', filterMes, filterAno],
+    queryKeys.personal.transactions(filterMes, filterAno),
     `/personal/transactions?mes=${filterMes}&ano=${filterAno}`,
     { staleTime: STALE_TIMES.FREQUENT }
   );
   const { data: dash } = useApiQuery<PersonalDashboard>(
-    ['personal', 'dashboard', filterMes, filterAno],
+    queryKeys.personal.dashboard(filterMes, filterAno),
     `/personal/dashboard?mes=${filterMes}&ano=${filterAno}`,
     { staleTime: STALE_TIMES.FREQUENT }
   );

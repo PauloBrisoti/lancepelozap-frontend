@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
-import { useApiQuery } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
+import { useApiQuery, queryKeys } from '../lib/query';
 import { saldoRestante } from '../utils/financeiro';
 import type { Receivable } from '../types/api';
 
@@ -47,7 +47,7 @@ export interface RenegForm {
  * A página fica apenas com a apresentação (tabela desktop + cards mobile + modais).
  */
 export function useFiado() {
-  const { activeStoreId } = useAuth();
+  const { activeStoreId } = useAuthStore();
   const [filter, setFilter] = useState<FiadoFilter>('all');
   const [search, setSearch] = useState('');
   const [payModal, setPayModal] = useState<Receivable | null>(null);
@@ -59,7 +59,7 @@ export function useFiado() {
   const [renegSaving, setRenegSaving] = useState(false);
 
   const { data: receivablesData, isLoading, refetch } = useApiQuery<Receivable[]>(
-    ['receivables', activeStoreId],
+    queryKeys.receivables(activeStoreId),
     '/finance/receivables',
     { enabled: !!activeStoreId, staleTime: 0, refetchOnMount: true }
   );

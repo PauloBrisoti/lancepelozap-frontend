@@ -19,6 +19,22 @@ vi.mock('../lib/api', () => ({
 
 vi.mock('../lib/query', () => ({
   useApiQuery: () => ({ ...mockQueryState, refetch: mockRefetch }),
+  queryKeys: {
+    customers: () => ['customers', 'store-1'],
+    products: () => ['products', 'store-1'],
+    sales: () => ['sales', 'store-1'],
+    receivables: () => ['receivables', 'store-1'],
+    paymentFees: () => ['payment-fees', 'store-1'],
+    storeDashboardConfig: () => ['store-dashboard-config', 'store-1'],
+    serviceOrders: () => ['service-orders', 'store-1'],
+    personal: {
+      categories: () => ['personal', 'categories'],
+      wallets: () => ['personal', 'wallets'],
+      transactions: () => ['personal', 'transactions'],
+      dashboard: () => ['personal', 'dashboard'],
+      aiAnalysis: () => ['personal', 'ai-analysis'],
+    },
+  },
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -26,7 +42,8 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ activeStoreId: 'store-1', user: null }),
+  useAuthStore: () => ({ activeStoreId: 'store-1' }),
+  useAuthUser: () => ({ user: null }),
 }));
 
 const sampleItems: SaleItem[] = [

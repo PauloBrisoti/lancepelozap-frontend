@@ -3,14 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
 import { isValidCPFOrCNPJ } from '../utils/cpfCnpj';
 import { formatBRL } from '../utils/format';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useCustomers } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
+import type { Customer as ApiCustomer } from '../types/api';
 import { useCep, formatCepInput, buildEnderecoCompleto } from '../hooks/useCep';
 
-interface Customer {
-  id: string;
-  nomeCompleto: string;
+interface Customer extends ApiCustomer {
   cpf?: string;
-  telefoneWhatsapp?: string;
   cep?: string;
   enderecoCompleto?: string;
   email?: string;
@@ -23,6 +22,7 @@ interface Customer {
 }
 
 export function ClientesPage() {
+  const { activeStoreId } = useAuthStore();
   const [modalAberto, setModalAberto] = useState(false);
   const { buscar: buscarCep } = useCep();
   // No mobile o cadastro vira uma "página" normal no fluxo do documento
@@ -56,11 +56,7 @@ export function ClientesPage() {
     return () => vv.removeEventListener('resize', update);
   }, []);
 
-  const { data: clientes = [], isLoading, refetch } = useApiQuery<Customer[]>(
-    ['customers'],
-    '/customers',
-    { staleTime: STALE_TIMES.NORMAL }
-  );
+  const { data: clientes = [], isLoading, refetch } = useCustomers<Customer>(activeStoreId);
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();

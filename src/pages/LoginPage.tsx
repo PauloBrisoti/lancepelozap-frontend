@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'react-hot-toast';
 import { fetchApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuthActions } from '../context/AuthContext';
 import { validarEmail } from '../lib/validators';
 import { TurnstileWidget } from '../components/TurnstileWidget';
 
@@ -27,7 +27,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { login } = useAuth();
+  const { login } = useAuthActions();
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);

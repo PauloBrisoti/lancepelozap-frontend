@@ -7,7 +7,8 @@ import toast from 'react-hot-toast';
 import { Modal } from '../components/Modal';
 import { StatusActions } from '../components/StatusActions';
 import { useModal } from '../hooks/useModal';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, useCustomers, STALE_TIMES } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
 
 interface Customer { id: string; nomeCompleto: string; telefoneWhatsapp: string; }
 interface Professional { id: string; nome: string; cor: string; telefone?: string; cargo?: string; ativo: boolean; }
@@ -22,6 +23,7 @@ interface Appointment {
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export function AgendaPage() {
+  const { activeStoreId } = useAuthStore();
   const [currentDate, setCurrentDate] = useState(() => todayLocalDate());
   const [filterProf, setFilterProf] = useState('');
 
@@ -42,19 +44,15 @@ export function AgendaPage() {
   if (filterProf) params.set('professionalId', filterProf);
 
   const { data: appointments = [], isLoading: appointmentsLoading, refetch: refetchAppointments } = useApiQuery<Appointment[]>(
-    ['agenda', 'appointments', currentDate, filterProf],
+    ['agenda', activeStoreId, 'appointments', currentDate, filterProf],
     `/appointments?${params}`,
     { staleTime: STALE_TIMES.FREQUENT }
   );
 
-  const { data: customers = [], isLoading: customersLoading } = useApiQuery<Customer[]>(
-    ['agenda', 'customers'],
-    '/customers',
-    { staleTime: STALE_TIMES.NORMAL }
-  );
+  const { data: customers = [], isLoading: customersLoading } = useCustomers(activeStoreId);
 
   const { data: professionals = [], isLoading: professionalsLoading, refetch: refetchProfessionals } = useApiQuery<Professional[]>(
-    ['agenda', 'professionals'],
+    ['agenda', activeStoreId, 'professionals'],
     '/appointments/professionals',
     { staleTime: STALE_TIMES.NORMAL }
   );

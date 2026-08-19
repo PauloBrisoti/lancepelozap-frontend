@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, Link, useNavigate } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthActions } from '../context/AuthContext';
 import { useStockAlerts } from '../hooks/useStockAlerts';
 import { AccordionSection } from './AccordionSection';
 import { ContextSwitcher } from './ContextSwitcher';
@@ -13,7 +13,8 @@ import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPack
 export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, activeWorkspace, isPf, isRestrictedRole, canAccess, logout } = useAuth();
+  const { user, activeWorkspace, isPf, isRestrictedRole, canAccess } = useAuthUser();
+  const { logout } = useAuthActions();
   const { count: alertCount } = useStockAlerts();
 
   const handleLogout = async () => {

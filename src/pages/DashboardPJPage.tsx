@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthStore } from '../context/AuthContext';
 import { TrendingUp, TrendingDown, Building2, DollarSign, Package, AlertCircle, Calendar, Landmark, PiggyBank, Wallet, AlertTriangle } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
@@ -73,7 +73,8 @@ interface ConsolidatedData {
 }
 
 export function DashboardPJPage() {
-  const { user, activeStoreId } = useAuth();
+  const { user } = useAuthUser();
+  const { activeStoreId } = useAuthStore();
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [period, setPeriod] = useState('30d');
   const [customStart, setCustomStart] = useState('');

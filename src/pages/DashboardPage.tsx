@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser, useAuthStore } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
 import { TrendingUp, TrendingDown, Calendar, Package, ShoppingBag, AlertCircle, ShieldAlert, History } from 'lucide-react';
 import { subDays, startOfMonth, format, subMonths, endOfMonth } from 'date-fns';
@@ -10,7 +10,8 @@ import { PersonalDashboardPage } from './PersonalDashboardPage';
 import { formatDateTimeBR } from '../lib/dates';
 
 export function DashboardPage() {
-  const { user, activeWorkspace, activeStoreId, loading: authLoading } = useAuth();
+  const { user, activeWorkspace, loading: authLoading } = useAuthUser();
+  const { activeStoreId } = useAuthStore();
   const [dateFilter, setDateFilter] = useState('THIS_MONTH');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');

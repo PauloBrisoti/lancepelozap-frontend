@@ -6,7 +6,8 @@ import { useCrudList } from '../hooks/useCrudList';
 import { formatDateBR, formatDateTimeBR } from '../lib/dates';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { Modal } from '../components/Modal';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
+import { estoqueBaixo } from '../utils/estoque';
 
 interface Category {
   id: string;
@@ -52,7 +53,7 @@ interface Product {
 }
 
 export function EstoquePage() {
-  const { isRestrictedRole } = useAuth();
+  const { isRestrictedRole } = useAuthUser();
   const { count: alertCount, products: alertProducts } = useStockAlerts();
   const [produtos, setProdutos] = useState<Product[]>([]);
   const [termoBusca, setTermoBusca] = useState('');
@@ -651,9 +652,9 @@ export function EstoquePage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${Number(prod.qtdEstoqueAtual) <= (prod.estoqueMinimo || 5) ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${estoqueBaixo(prod) ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
                           {prod.qtdEstoqueAtual} un
-                          {Number(prod.qtdEstoqueAtual) <= (prod.estoqueMinimo || 5) && (
+                          {estoqueBaixo(prod) && (
                             <span className="ml-1 text-rose-500 font-bold">!</span>
                           )}
                         </span>
@@ -701,9 +702,9 @@ export function EstoquePage() {
                       <tr key={prod.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 font-medium text-gray-900">{prod.nome}</td>
                         <td className="px-6 py-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${Number(prod.qtdEstoqueAtual) <= (prod.estoqueMinimo || 5) ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${estoqueBaixo(prod) ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
                             {prod.qtdEstoqueAtual} un
-                            {Number(prod.qtdEstoqueAtual) <= (prod.estoqueMinimo || 5) && (
+                            {estoqueBaixo(prod) && (
                               <span className="ml-1 text-rose-500 font-bold">!</span>
                             )}
                           </span>

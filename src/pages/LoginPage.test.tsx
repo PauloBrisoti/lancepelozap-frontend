@@ -20,7 +20,7 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ login: mockLogin }),
+  useAuthActions: () => ({ login: mockLogin }),
 }));
 
 function renderPage() {

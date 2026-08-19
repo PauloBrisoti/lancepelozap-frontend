@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { fetchApi, ApiError } from '../lib/api';
 import { Modal } from '../components/Modal';
 import { useModal } from '../hooks/useModal';
@@ -55,7 +55,7 @@ const deriveAccessLevel = (actions: string[]): Permission['accessLevel'] => {
 };
 
 export function PermissoesAdminPage() {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirtyRoleIds, setDirtyRoleIds] = useState<string[]>([]);

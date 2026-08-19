@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { trialDaysLeft } from '../utils/subscription';
 
 export function TrialBanner() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   // Banner de trial é exclusivo de lojistas; SUPER_ADMIN/equipe interna não
   // têm assinatura (o backend responderia 401, que derrubaria a sessão).
   const { data: sub } = useSubscription(!!user && user.role !== 'SUPER_ADMIN');

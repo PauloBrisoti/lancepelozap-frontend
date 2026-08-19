@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthUser } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
 import { Modal } from '../components/Modal';
 import { useModal } from '../hooks/useModal';
@@ -39,7 +39,7 @@ const isExpired = (iso?: string | null) => {
 };
 
 export function EquipeAdminPage() {
-  const { user } = useAuth();
+  const { user } = useAuthUser();
   const modal = useModal();
   
   const [inviteEmail, setInviteEmail] = useState('');

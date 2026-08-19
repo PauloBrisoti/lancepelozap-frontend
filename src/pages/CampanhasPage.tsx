@@ -3,10 +3,11 @@ import { fetchApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { CampaignLog } from '../types/api';
 import { formatDateTimeBR } from '../lib/dates';
-import { useApiQuery, STALE_TIMES } from '../lib/query';
+import { useApiQuery, useCustomers, STALE_TIMES } from '../lib/query';
+import { useAuthStore } from '../context/AuthContext';
+import type { Customer as ApiCustomer } from '../types/api';
 
-interface Customer {
-  id: string; nomeCompleto: string; telefoneWhatsapp: string;
+interface Customer extends ApiCustomer {
   aceitaMarketing: boolean;
 }
 
@@ -15,6 +16,7 @@ interface Template {
 }
 
 export function CampanhasPage() {
+  const { activeStoreId } = useAuthStore();
   const [tab, setTab] = useState<'enviar' | 'templates' | 'historico'>('enviar');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState('');
@@ -27,14 +29,10 @@ export function CampanhasPage() {
   const [templateConteudo, setTemplateConteudo] = useState('');
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
-  const { data: customers = [], refetch: refetchLogs } = useApiQuery<Customer[]>(
-    ['campanhas', 'customers'],
-    '/customers',
-    { staleTime: STALE_TIMES.NORMAL }
-  );
+  const { data: customers = [], refetch: refetchLogs } = useCustomers<Customer>(activeStoreId);
 
   const { data: templates = [], refetch: refetchTemplates } = useApiQuery<Template[]>(
-    ['campanhas', 'templates'],
+    ['campanhas', activeStoreId, 'templates'],
     '/whatsapp/templates',
     { staleTime: STALE_TIMES.STATIC }
   );
