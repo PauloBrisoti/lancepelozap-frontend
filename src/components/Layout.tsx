@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { NotificationBell } from './NotificationBell';
 import { TrialBanner } from './TrialBanner';
+import { SubscriptionBanner } from './SubscriptionBanner';
 
 export function Layout() {
   const navigate = useNavigate();
@@ -63,6 +64,7 @@ export function Layout() {
           </div>
         </header>
         <TrialBanner />
+        <SubscriptionBanner />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-3 md:p-8 relative pb-20 md:pb-8">
           <Outlet />
         </main>

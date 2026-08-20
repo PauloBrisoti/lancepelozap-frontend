@@ -58,6 +58,7 @@ const ZerarPainelPage = lazy(() => import('./pages/ZerarPainelPage').then(m => (
 const NotificacoesAdminPage = lazy(() => import('./pages/NotificacoesAdminPage').then(m => ({ default: m.NotificacoesAdminPage })));
 const RelatoriosFinanceirosPage = lazy(() => import('./pages/RelatoriosFinanceirosPage').then(m => ({ default: m.RelatoriosFinanceirosPage })));
 const InadimplentesPage = lazy(() => import('./pages/InadimplentesPage').then(m => ({ default: m.InadimplentesPage })));
+const PixProofsAdminPage = lazy(() => import('./pages/PixProofsAdminPage').then(m => ({ default: m.PixProofsAdminPage })));
 const EquipeAdminPage = lazy(() => import('./pages/EquipeAdminPage').then(m => ({ default: m.EquipeAdminPage })));
 const PermissoesAdminPage = lazy(() => import('./pages/PermissoesAdminPage').then(m => ({ default: m.PermissoesAdminPage })));
 const ConfiguracoesGeraisAdminPage = lazy(() => import('./pages/ConfiguracoesGeraisAdminPage').then(m => ({ default: m.ConfiguracoesGeraisAdminPage })));
@@ -179,6 +180,7 @@ function AppRoutes() {
             <Route path="notificacoes" element={<NotificacoesAdminPage />} />
             <Route path="relatorios-financeiros" element={<RelatoriosFinanceirosPage />} />
             <Route path="inadimplentes" element={<InadimplentesPage />} />
+            <Route path="pix-comprovantes" element={<PixProofsAdminPage />} />
             <Route path="equipe" element={<EquipeAdminPage />} />
             <Route path="equipe/permissoes" element={<PermissoesAdminPage />} />
             <Route path="configuracoes" element={<ConfiguracoesGeraisAdminPage />} />

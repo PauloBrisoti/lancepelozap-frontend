@@ -40,8 +40,8 @@ const features = [
   },
   {
     icon: '📱',
-    title: 'Integração WhatsApp',
-    desc: 'Envie recibos, cobranças e promoções direto no WhatsApp do seu cliente. Tudo automatizado, com um clique.',
+    title: 'Relatórios Práticos',
+    desc: 'Exporte dados, acompanhe o fluxo e tenha todas as informações financeiras organizadas na palma da mão para decidir rápido.',
     color: 'bg-green-50 text-green-600',
   },
 ];
@@ -231,11 +231,11 @@ export function LandingPage() {
             </div>
 
             <h1 className="text-5xl md:text-7xl font-black text-gray-900 leading-[1.1] tracking-tight mb-6 max-w-4xl mx-auto">
-              Controle seu negócio de forma <span className="text-brand-600">simples e ágil</span>
+              O controle financeiro do seu negócio na <span className="text-brand-600">palma da mão</span>
             </h1>
 
             <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed font-medium mb-10">
-              PDV, estoque, catálogo digital e financeiro integrados no seu celular. Venda mais pelo WhatsApp sem complicação.
+              Gerencie fluxo de caixa, DRE, estoque e vendas em um painel completo. Venda mais integrando seu catálogo ao WhatsApp.
             </p>
 
             <div className="flex flex-col sm:flex-row justify-center gap-4 mb-20 w-full max-w-md mx-auto">
@@ -350,58 +350,112 @@ export function LandingPage() {
         </section>
 
         {/* PRICING */}
+        {/* PRICING */}
         <section id="pricing" className="py-24 px-4 bg-white border-t border-gray-200">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-black text-gray-900">Escolha o plano ideal</h2>
-              <p className="mt-4 text-lg text-gray-500">Do controle pessoal à gestão empresarial completa.</p>
+              <span className="text-brand-600 text-sm font-bold uppercase tracking-widest mb-2 block">Investimento</span>
+              <h2 className="text-3xl md:text-5xl font-black text-gray-900">Escolha o plano ideal para o seu momento</h2>
+              <p className="mt-4 text-lg text-gray-500">Do controle pessoal à gestão empresarial completa. Sem fidelidade.</p>
             </div>
 
-            {planos.map((grupo, gi) => (
-              <div key={gi} className="mb-16 last:mb-0">
-                <div className="flex items-center gap-4 mb-8">
-                  <span className={`px-4 py-1.5 rounded-full text-sm font-black tracking-wider ${grupo.cor}`}>
-                    {grupo.categoria}
-                  </span>
-                  <div className="h-px flex-1 bg-gray-200" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+              
+              {/* PLANO PF */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-emerald-100 flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                <div className="mb-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider bg-emerald-50 text-emerald-700">PF</span>
+                  <h3 className="text-xl font-black text-gray-900 mt-3">Finanças Pessoais</h3>
+                  <p className="text-xs mt-1 text-gray-500">Controle contas e metas</p>
                 </div>
-
-                <div className={`grid grid-cols-1 ${grupo.plans.length > 1 ? 'md:grid-cols-2' : 'md:grid-cols-1 max-w-md'} gap-8`}>
-                  {grupo.plans.map((plan, pi) => (
-                    <div key={pi} className={`relative rounded-3xl p-8 bg-white flex flex-col border-2 ${grupo.cor} shadow-sm hover:shadow-lg transition-shadow`}>
-                      {grupo.badge && (
-                        <div className="absolute -top-4 inset-x-0 flex justify-center">
-                          <span className="bg-brand-600 text-white px-4 py-1 rounded-full text-xs font-black tracking-widest uppercase shadow-lg">
-                            {grupo.badge}
-                          </span>
-                        </div>
-                      )}
-                      <div className="mb-4">
-                        <h3 className="text-2xl font-black text-gray-900">{plan.name}</h3>
-                        <p className="text-sm mt-1 text-gray-500">{plan.desc}</p>
-                      </div>
-                      <div className="flex items-baseline gap-1 my-6">
-                        <span className="text-4xl font-black text-gray-900">{plan.price}</span>
-                        <span className="text-gray-500 text-sm">/mês</span>
-                      </div>
-                      <ul className="space-y-4 mb-8 flex-1">
-                        {plan.features.map((feat, j) => (
-                          <li key={j} className="flex items-start gap-3 text-sm text-gray-700">
-                            <svg className="w-5 h-5 flex-shrink-0 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className="pt-0.5">{feat}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <Link to="/cadastro" className={`block w-full py-3.5 px-6 rounded-xl text-center font-bold text-white transition-all ${grupo.corBotao} shadow-md`}>
-                        Começar 7 dias grátis
-                      </Link>
-                    </div>
-                  ))}
+                <div className="flex items-baseline gap-1 my-4">
+                  <span className="text-3xl font-black text-gray-900">R$29,90</span>
+                  <span className="text-gray-500 text-xs">/mês</span>
                 </div>
+                <ul className="space-y-3 mb-8 flex-1 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">✓ Controle de gastos pessoais</li>
+                  <li className="flex items-start gap-2">✓ Metas de economia</li>
+                  <li className="flex items-start gap-2">✓ Categorias inteligentes</li>
+                  <li className="flex items-start gap-2">✓ Dashboard financeiro PF</li>
+                </ul>
+                <Link to="/cadastro" className="block w-full py-3 px-4 rounded-xl text-center font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all text-sm">
+                  Testar 7 dias grátis
+                </Link>
               </div>
-            ))}
+
+              {/* PLANO VENDAS + ESTOQUE */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-brand-200 flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                <div className="mb-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider bg-brand-50 text-brand-700">PJ INICIAL</span>
+                  <h3 className="text-xl font-black text-gray-900 mt-3">Vendas + Estoque</h3>
+                  <p className="text-xs mt-1 text-gray-500">PDV e catálogo para sua loja</p>
+                </div>
+                <div className="flex items-baseline gap-1 my-4">
+                  <span className="text-3xl font-black text-gray-900">R$97,00</span>
+                  <span className="text-gray-500 text-xs">/mês</span>
+                </div>
+                <ul className="space-y-3 mb-8 flex-1 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">✓ PDV com busca rápida</li>
+                  <li className="flex items-start gap-2">✓ Catálogo Digital</li>
+                  <li className="flex items-start gap-2">✓ Gestão de Estoque + alertas</li>
+                  <li className="flex items-start gap-2">✓ Clientes e crediário</li>
+                </ul>
+                <Link to="/cadastro" className="block w-full py-3 px-4 rounded-xl text-center font-bold text-white bg-brand-600 hover:bg-brand-700 transition-all text-sm">
+                  Testar 7 dias grátis
+                </Link>
+              </div>
+
+              {/* PLANO FINANCEIRO PJ (DESTAQUE / MAIS ESCOLHIDO) */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-brand-600 relative flex flex-col shadow-lg">
+                <div className="absolute -top-3 inset-x-0 flex justify-center">
+                  <span className="bg-brand-600 text-white px-3 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm">
+                    Mais Escolhido
+                  </span>
+                </div>
+                <div className="mb-4 mt-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider bg-brand-50 text-brand-700">PJ COMPLETO</span>
+                  <h3 className="text-xl font-black text-gray-900 mt-3">Financeiro PJ</h3>
+                  <p className="text-xs mt-1 text-gray-500">Gestão financeira total</p>
+                </div>
+                <div className="flex items-baseline gap-1 my-4">
+                  <span className="text-3xl font-black text-gray-900">R$147,00</span>
+                  <span className="text-gray-500 text-xs">/mês</span>
+                </div>
+                <ul className="space-y-3 mb-8 flex-1 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">✓ Tudo do Vendas + Estoque</li>
+                  <li className="flex items-start gap-2">✓ DRE completo (receitas/despesas)</li>
+                  <li className="flex items-start gap-2">✓ Fluxo de caixa diário</li>
+                  <li className="flex items-start gap-2">✓ Contas a pagar/receber</li>
+
+                </ul>
+                <Link to="/cadastro" className="block w-full py-3 px-4 rounded-xl text-center font-bold text-white bg-brand-600 hover:bg-brand-700 transition-all text-sm shadow-md">
+                  Testar 7 dias grátis
+                </Link>
+              </div>
+
+              {/* PLANO EMPRESARIAL */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-purple-200 flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                <div className="mb-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-black tracking-wider bg-purple-50 text-purple-700">EMPRESARIAL</span>
+                  <h3 className="text-xl font-black text-gray-900 mt-3">Rede / Franquia</h3>
+                  <p className="text-xs mt-1 text-gray-500">Múltiplas lojas consolidadas</p>
+                </div>
+                <div className="flex items-baseline gap-1 my-4">
+                  <span className="text-3xl font-black text-gray-900">R$249,00</span>
+                  <span className="text-gray-500 text-xs">/mês</span>
+                </div>
+                <ul className="space-y-3 mb-8 flex-1 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">✓ Tudo do Financeiro PJ</li>
+                  <li className="flex items-start gap-2">✓ Múltiplas lojas/filiais</li>
+                  <li className="flex items-start gap-2">✓ Dashboard consolidado</li>
+                  <li className="flex items-start gap-2">✓ Suporte prioritário</li>
+                </ul>
+                <Link to="/cadastro" className="block w-full py-3 px-4 rounded-xl text-center font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all text-sm">
+                  Testar 7 dias grátis
+                </Link>
+              </div>
+
+            </div>
           </div>
         </section>
 
@@ -439,10 +493,10 @@ export function LandingPage() {
           <div className="max-w-4xl mx-auto text-center">
             <div className="bg-brand-600 rounded-3xl p-12 md:p-16 shadow-xl shadow-brand-600/20">
               <h2 className="text-3xl md:text-5xl font-black text-white mb-6">
-                Pronto para digitalizar suas vendas?
+                Pronto para assumir o controle financeiro do seu negócio?
               </h2>
               <p className="text-lg text-brand-100 mb-10 max-w-2xl mx-auto">
-                Junte-se a milhares de lojistas que estão automatizando seu faturamento com o Lance Pelo Zap.
+                Junte-se a lojistas que organizaram o caixa, eliminaram planilhas e escalaram a gestão com o Lance Pelo Zap.
               </p>
               <Link to="/cadastro" className="inline-block bg-white text-brand-600 px-10 py-4 rounded-xl font-bold text-lg hover:bg-gray-50 transition-colors shadow-lg">
                 Criar conta gratuita

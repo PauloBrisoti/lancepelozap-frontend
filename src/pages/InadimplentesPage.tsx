@@ -47,12 +47,13 @@ export function InadimplentesPage() {
   };
   
   const markPaid = async (subId: string) => {
+    if (!confirm('Confirmar pagamento manual? A assinatura será renovada por +30 dias.')) return;
     try {
-      await fetchApi(`/super-admin/subscriptions/${subId}/plan`, {
-        method: 'PUT',
-        body: JSON.stringify({ statusPagamento: 'PAGO' }),
+      const res = await fetchApi<{ message: string }>('/super-admin/subscriptions/approve', {
+        method: 'POST',
+        body: JSON.stringify({ subscriptionId: subId }),
       });
-      toast.success('Assinatura marcada como paga');
+      toast.success(res.message);
       refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
   };

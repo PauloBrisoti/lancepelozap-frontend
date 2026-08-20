@@ -22,7 +22,7 @@ const exportCsv = (users: UserData[]) => {
   const header = ['Nome', 'Email', 'Nível', 'Lojas', 'Status', 'Cadastrado em', 'Último acesso'];
   const lines = users.map(u => [
     u.nome, u.email,
-    u.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Usuário',
+    u.role === 'SUPER_ADMIN' ? 'Super Admin' : u.role === 'GERENTE' ? 'Gerente' : 'Usuário',
     u.stores.map(s => s.nome).join('; '),
     u.ativo ? 'Ativo' : 'Inativo',
     formatDateTimeBR(u.createdAt),
@@ -189,10 +189,14 @@ export function UsuariosAdminPage() {
     if (!editForm.email.trim()) return toast.error('E-mail é obrigatório');
     setSaving(true);
     try {
-      await fetchApi(`/super-admin/users/${editModal!.id}`, {
+      const res = await fetchApi<{ message: string; lojasAjustadas?: number }>(`/super-admin/users/${editModal!.id}`, {
         method: 'PUT', body: JSON.stringify(editForm),
       });
-      toast.success('Usuário atualizado!');
+      if (editForm.role === 'GERENTE' && (res.lojasAjustadas ?? 0) > 0) {
+        toast.success(`Usuário promovido a Gerente em ${res.lojasAjustadas} loja(s)!`);
+      } else {
+        toast.success(res.message);
+      }
       setEditModal(null);
       refetch();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro desconhecido'); }
@@ -210,9 +214,9 @@ export function UsuariosAdminPage() {
       <div><p className="font-medium text-gray-900">{u.nome}</p><p className="text-xs text-gray-500">{u.email}</p></div>
     )},
     { key: 'role', header: 'Nível', render: (u) => (
-      <StatusBadge status={u.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'USER'}
-        labels={{ SUPER_ADMIN: 'Super Admin', USER: 'Usuário' }}
-        colors={{ SUPER_ADMIN: 'bg-purple-100 text-purple-700', USER: 'bg-blue-100 text-blue-700' }} />
+      <StatusBadge status={u.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : u.role === 'GERENTE' ? 'GERENTE' : 'USER'}
+        labels={{ SUPER_ADMIN: 'Super Admin', GERENTE: 'Gerente', USER: 'Usuário' }}
+        colors={{ SUPER_ADMIN: 'bg-purple-100 text-purple-700', GERENTE: 'bg-emerald-100 text-emerald-700', USER: 'bg-blue-100 text-blue-700' }} />
     )},
     { key: 'stores', header: 'Lojas', render: (u) => (
       <span className="text-sm text-gray-600">{u.stores.map(s => s.nome).join(', ') || '-'}</span>
@@ -285,6 +289,7 @@ export function UsuariosAdminPage() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
           <option value="ALL">Todos os níveis</option>
           <option value="USER">Usuário</option>
+          <option value="GERENTE">Gerente</option>
           <option value="SUPER_ADMIN">Super Admin</option>
         </select>
         <select value={filterAtivo} onChange={e => { setFilterAtivo(e.target.value); setPage(1); setSelected([]); }}
@@ -369,8 +374,15 @@ export function UsuariosAdminPage() {
               onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
               <option value="USER">Usuário</option>
+              <option value="GERENTE">Gerente</option>
               <option value="SUPER_ADMIN">Super Admin</option>
             </select>
+            {editForm.role === 'GERENTE' && (
+              <p className="text-xs text-gray-500 mt-1.5">
+                O usuário terá acesso às rotas de gestão (ex: financeiro) em todas as lojas dele — as lojas onde ele é
+                Vendedor/Caixa serão promovidas a Gerente.
+              </p>
+            )}
           </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-sm font-medium text-gray-700">Usuário Ativo</span>

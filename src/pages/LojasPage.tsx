@@ -503,10 +503,6 @@ export function LojasPage() {
     try {
       if (isEditing) {
         const payload: Record<string, unknown> = { ...formData };
-        if (!formData.subscriptionId) {
-          delete payload.subscriptionId;
-          delete payload.planoId;
-        }
         await fetchApi(`/super-admin/clients/${formData.id}`, {
           method: 'PUT',
           body: JSON.stringify(payload)

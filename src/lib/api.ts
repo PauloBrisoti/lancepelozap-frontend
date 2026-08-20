@@ -30,6 +30,8 @@ interface FetchApiOptions extends RequestInit {
   timeout?: number;
   /** Sinal para cancelamento externo (ex: AbortController) */
   signal?: AbortSignal;
+  /** Retorna ArrayBuffer bruto em vez de JSON (ex: download de arquivos) */
+  raw?: boolean;
 }
 
 /**
@@ -46,7 +48,7 @@ export async function fetchApi<T = any>(
   endpoint: string,
   options: FetchApiOptions = {}
 ): Promise<T> {
-  const { timeout = 15000, signal: externalSignal, ...fetchOptions } = options;
+  const { timeout = 15000, signal: externalSignal, raw = false, ...fetchOptions } = options;
   const url = `${API_URL}${endpoint}`;
 
   // Timeout + sinal externo combinados
@@ -112,6 +114,8 @@ export async function fetchApi<T = any>(
     }
 
     if (response.status === 204) return null as T;
+
+    if (raw) return (await response.arrayBuffer()) as T;
 
     return response.json();
   } catch (error: unknown) {
