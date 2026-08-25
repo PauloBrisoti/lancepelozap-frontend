@@ -238,8 +238,28 @@ export function ComprasPage() {
         primeiroVencimento: formOrder.formaPagamento !== 'A_VISTA' && formOrder.primeiroVencimento ? formOrder.primeiroVencimento : undefined,
       };
       if (editingOrder) {
-        await fetchApi(`/purchases/${editingOrder.id}`, { method: 'PUT', body: JSON.stringify(body) });
-        toast.success('Pedido atualizado!');
+        if (editingOrder.status === 'RECEBIDO') {
+          const ok = window.confirm(
+            'Este pedido já foi RECEBIDO. A edição vai:\n' +
+            '• Ajustar o estoque das diferenças de quantidade;\n' +
+            '• Recalcular as parcelas PENDENTES no Contas a Pagar (parcelas já pagas permanecem);\n' +
+            '• Gerar estorno na carteira se o novo total for menor que o já pago.\n\nContinuar?'
+          );
+          if (!ok) return;
+          await fetchApi(`/purchases/${editingOrder.id}/received`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              items: body.items,
+              valorDesconto: body.valorDesconto,
+              dataPrevisao: body.dataPrevisao,
+              observacoes: body.observacoes,
+            }),
+          });
+          toast.success('Pedido atualizado! Estoque e Contas a Pagar ajustados.');
+        } else {
+          await fetchApi(`/purchases/${editingOrder.id}`, { method: 'PUT', body: JSON.stringify(body) });
+          toast.success('Pedido atualizado!');
+        }
       } else {
         await fetchApi('/purchases', { method: 'POST', body: JSON.stringify(body) });
         toast.success('Pedido criado!');
@@ -393,6 +413,11 @@ export function ComprasPage() {
                     <td className="px-4 py-3 text-sm text-gray-500">{order.items?.reduce((s: number, i: PurchaseItem) => s + Number(i.quantidade), 0) || 0}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
+                        {order.status === 'RECEBIDO' && (
+                          <button onClick={() => openEdit(order)} className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar pedido recebido (ajusta estoque e Contas a Pagar)">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                        )}
                         {order.status === 'RASCUNHO' && (
                           <>
                             <button onClick={() => openEdit(order)} className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
