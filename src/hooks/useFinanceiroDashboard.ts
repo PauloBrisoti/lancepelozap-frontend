@@ -186,12 +186,23 @@ export function useFinanceiroDashboard({ activeStoreId, activeTab, queryParams }
         const payables = await fetchApi('/finance/payables');
         setPayables(payables);
       } else if (activeTab === 'DRE') {
-        const dre = await fetchApi(`/finance/dre${queryParams}`);
-        setDreData(dre);
+        try {
+          const dre = await fetchApi(`/finance/dre${queryParams}`);
+          setDreData(dre);
+        } catch {
+          // Falhou (ex: plano sem feature "financeiro"): limpa para NÃO exibir
+          // DRE de período anterior como se fosse do período selecionado.
+          setDreData(null);
+          throw new Error('DRE_INDISPONIVEL');
+        }
       }
     } catch (error) {
       console.error(error);
-      toast.error('Erro ao carregar dados financeiros');
+      if (error instanceof Error && error.message === 'DRE_INDISPONIVEL') {
+        toast.error('DRE indisponível para o seu plano. Faça upgrade para liberar.');
+      } else {
+        toast.error('Erro ao carregar dados financeiros');
+      }
     } finally {
       setLoading(false);
     }
