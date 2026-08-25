@@ -7,7 +7,7 @@ import { STALE_TIMES, useCustomers, usePaymentFees } from '../lib/query';
 import { todayLocalDate, formatBRL } from '../utils/format';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useOfflineSync } from '../hooks/useOfflineSync';
-import { useSaleDraft } from '../hooks/useSaleDraft';
+import { useSaleDraft, type SaleDraft, type SaleDraftField } from '../hooks/useSaleDraft';
 import { queueSale } from '../services/offlineSales';
 import { cacheProducts, getCachedProducts } from '../services/offlineProducts';
 
