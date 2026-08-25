@@ -9,6 +9,8 @@ export interface Wallet {
   nome: string;
   tipo: string;
   saldoAtual: number;
+  /** Saldo consolidado ao fim do período selecionado (backend calcula) */
+  saldoFimPeriodo?: number;
 }
 
 export interface Transaction {
@@ -131,6 +133,7 @@ export function useFinanceiroDashboard({ activeStoreId, activeTab, queryParams }
   // Dados do Dashboard
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [saldoTotal, setSaldoTotal] = useState(0);
+  const [saldoFimPeriodo, setSaldoFimPeriodo] = useState<number | null>(null);
   const [, setSaldoProjetado] = useState(0);
   const [devedoresAtrasados, setDevedoresAtrasados] = useState<any[]>([]);
   const [totalAtrasado, setTotalAtrasado] = useState(0);
@@ -157,6 +160,7 @@ export function useFinanceiroDashboard({ activeStoreId, activeTab, queryParams }
       const dash = await fetchApi(`/finance/dashboard${queryParams}`);
       setWallets(dash.wallets);
       setSaldoTotal(dash.saldoTotal);
+      setSaldoFimPeriodo(typeof dash.saldoFimPeriodo === 'number' ? dash.saldoFimPeriodo : null);
       setSaldoProjetado(dash.saldoProjetado || 0);
       setDevedoresAtrasados(dash.devedoresAtrasados || []);
       setTotalAtrasado(dash.totalAtrasado);
@@ -223,6 +227,7 @@ export function useFinanceiroDashboard({ activeStoreId, activeTab, queryParams }
     loading,
     wallets,
     saldoTotal,
+    saldoFimPeriodo,
     devedoresAtrasados,
     totalAtrasado,
     despesasMes,

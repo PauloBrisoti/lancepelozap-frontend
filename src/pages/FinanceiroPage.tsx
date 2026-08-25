@@ -38,7 +38,7 @@ export const FinanceiroPage: React.FC = () => {
   // Dados do Dashboard e abas (useFinanceiroDashboard)
   const dashboard = useFinanceiroDashboard({ activeStoreId, activeTab, queryParams });
   const {
-    loading, wallets, saldoTotal, devedoresAtrasados, totalAtrasado, despesasMes,
+    loading, wallets, saldoTotal, saldoFimPeriodo, devedoresAtrasados, totalAtrasado, despesasMes,
     comissaoPagasMes, pjData, transactions, receivables, payables, dreData,
     dashboardCards,
   } = dashboard;
@@ -380,9 +380,11 @@ export const FinanceiroPage: React.FC = () => {
                   <p className="text-[11px] font-bold text-brand-700 uppercase tracking-wider">Caixa Disponível</p>
                 </div>
                 <p className="text-xl md:text-2xl font-extrabold text-brand-800 tracking-tight tabular-nums">
-                  {formatBRL(pjData?.saldoAtual ?? saldoTotal)}
+                  {formatBRL(saldoFimPeriodo ?? pjData?.saldoAtual ?? saldoTotal)}
                 </p>
-                <p className="text-[11px] text-brand-600/80 mt-1.5 leading-snug">Saldo total em todas as carteiras</p>
+                <p className="text-[11px] text-brand-600/80 mt-1.5 leading-snug">
+                  Ao fim do período selecionado · hoje: {formatBRL(pjData?.saldoAtual ?? saldoTotal)}
+                </p>
               </div>
             </div>
           )}
@@ -619,7 +621,7 @@ export const FinanceiroPage: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm md:text-base font-bold text-gray-900">Saldos por Carteira</h2>
-              <p className="text-[11px] md:text-xs text-gray-400">Onde o dinheiro está alocado</p>
+              <p className="text-[11px] md:text-xs text-gray-400">Posição ao fim do período selecionado</p>
             </div>
           </div>
           <div className="px-4 md:px-6 pb-4 md:pb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -630,7 +632,7 @@ export const FinanceiroPage: React.FC = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-800 truncate">{w.nome}</p>
-                  <p className="text-lg font-extrabold text-gray-900 tracking-tight tabular-nums">{formatBRL(Number(w.saldoAtual))}</p>
+                  <p className="text-lg font-extrabold text-gray-900 tracking-tight tabular-nums">{formatBRL(Number(w.saldoFimPeriodo ?? w.saldoAtual))}</p>
                 </div>
                 <span className="text-[9px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full uppercase font-bold shrink-0">{w.tipo}</span>
               </div>
