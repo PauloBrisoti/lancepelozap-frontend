@@ -40,8 +40,6 @@ const FinanceiroPF = lazy(() => import('./pages/FinanceiroPF').then(m => ({ defa
 const ClientesPage = lazy(() => import('./pages/ClientesPage').then(m => ({ default: m.ClientesPage })));
 const PlanosPage = lazy(() => import('./pages/PlanosPage').then(m => ({ default: m.PlanosPage })));
 const ConfiguracoesPage = lazy(() => import('./pages/ConfiguracoesPage').then(m => ({ default: m.ConfiguracoesPage })));
-const WhatsAppConfigPage = lazy(() => import('./pages/WhatsAppConfigPage').then(m => ({ default: m.WhatsAppConfigPage })));
-const CampanhasPage = lazy(() => import('./pages/CampanhasPage').then(m => ({ default: m.CampanhasPage })));
 const LegacyImportPage = lazy(() => import('./pages/LegacyImportPage').then(m => ({ default: m.LegacyImportPage })));
 const PlanilhaImportPage = lazy(() => import('./pages/PlanilhaImportPage').then(m => ({ default: m.PlanilhaImportPage })));
 const FiadoPage = lazy(() => import('./pages/FiadoPage').then(m => ({ default: m.FiadoPage })));
@@ -88,7 +86,7 @@ function FeatureGuard({ children, feature }: { children: React.ReactNode; featur
 
   const storeRoutes = ['pdv','caixa','vendas','os','agenda','orcamentos','compras',
     'fornecedores','comissoes','devolucoes','relatorios','estoque','transferencias',
-    'inventario','financeiro','clientes','whatsapp','campanhas','fiado'];
+    'inventario','financeiro','clientes','fiado'];
 
   if (isPf && feature !== 'financas_pessoais') {
     const currentPath = location.pathname.replace('/app/', '').split('/')[0];
@@ -159,8 +157,6 @@ function AppRoutes() {
             <Route path="planos" element={<StoreRoleGuard><PlanosPage /></StoreRoleGuard>} />
             <Route path="configuracoes" element={<StoreRoleGuard><ConfiguracoesPage /></StoreRoleGuard>} />
             <Route path="configuracoes/maquininha" element={<StoreRoleGuard><ConfigCardMachinePage /></StoreRoleGuard>} />
-            <Route path="whatsapp" element={<FeatureGuard><WhatsAppConfigPage /></FeatureGuard>} />
-            <Route path="campanhas" element={<FeatureGuard><CampanhasPage /></FeatureGuard>} />
             <Route path="importacao-legada" element={<StoreRoleGuard><LegacyImportPage /></StoreRoleGuard>} />
             <Route path="importar-planilha" element={<StoreRoleGuard><PlanilhaImportPage /></StoreRoleGuard>} />
             <Route path="fiado" element={<FeatureGuard><FiadoPage /></FeatureGuard>} />

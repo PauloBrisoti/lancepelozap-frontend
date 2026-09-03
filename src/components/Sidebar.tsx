@@ -174,14 +174,6 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
               )}
 
               <AccordionSection title="Comunicação" icon="💬" defaultOpen={section === 'Comunicação'}>
-                {(!user?.features || user.features?.whatsapp) && <Link to="/app/whatsapp" className={getLinkClass('/app/whatsapp')}>
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                  WhatsApp
-                </Link>}
-                {(!user?.features || user.features?.campanhas) && <Link to="/app/campanhas" className={getLinkClass('/app/campanhas')}>
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                  Campanhas
-                </Link>}
                 <Link to="/app/chamados" className={getLinkClass('/app/chamados')}>
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                   Suporte Técnico

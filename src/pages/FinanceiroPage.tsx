@@ -242,7 +242,7 @@ export const FinanceiroPage: React.FC = () => {
     }
   };
 
-  const handleCobrancaWhatsapp = async (devedor: Receivable) => {
+  const handleCobrancaWhatsapp = (devedor: Receivable) => {
     if (!devedor.telefone) {
       toast.error('Cliente não possui telefone cadastrado!');
       return;
@@ -250,21 +250,8 @@ export const FinanceiroPage: React.FC = () => {
     const num = devedor.telefone.replace(/\D/g, '');
     const nome = devedor.nome;
     const valor = Number(devedor.valor).toFixed(2);
-    try {
-      await fetchApi('/whatsapp/send-reminder', {
-        method: 'POST',
-        body: JSON.stringify({
-          phone: num,
-          customerName: nome,
-          value: valor,
-          daysOverdue: devedor.diasAtraso || 0,
-        }),
-      });
-      toast.success('Lembrete enviado via WhatsApp!');
-    } catch {
-      const msg = encodeURIComponent(`Olá ${nome}, notamos um débito em aberto no valor de R$ ${valor}. Pode verificar?`);
-      window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
-    }
+    const msg = encodeURIComponent(`Olá ${nome}, notamos um débito em aberto no valor de R$ ${valor}. Pode verificar?`);
+    window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
   };
 
   if (loading && wallets.length === 0) {
@@ -763,11 +750,24 @@ export const FinanceiroPage: React.FC = () => {
                     </td>
                     <td className="px-3 md:px-4 py-2.5 md:py-3 max-w-[120px] md:max-w-none">
                       <div className="font-medium text-gray-800 text-xs md:text-sm truncate">{tx.descricao}</div>
-                      {tx.sale?.saleItems && tx.sale.saleItems.length > 0 && (
-                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 md:mt-1 max-w-[100px] md:max-w-xs truncate">
-                          {tx.sale.saleItems.map((item: SaleItem) => `${Number(item.quantidade)}x ${item.product?.nome || 'Produto'}`).join(', ')}
-                        </div>
-                      )}
+                      {(() => {
+                        const parcelaMatch = tx.descricao?.match(/\((\d+)\/(\d+)\)/);
+                        if (parcelaMatch) {
+                          return (
+                            <div className="flex items-center gap-1.5 mt-0.5 md:mt-1">
+                              <span className="inline-flex items-center bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                {parcelaMatch[1]}/{parcelaMatch[2]}
+                              </span>
+                              <span className="text-[10px] md:text-xs text-gray-400">Parcela</span>
+                            </div>
+                          );
+                        }
+                        return tx.sale?.saleItems && tx.sale.saleItems.length > 0 ? (
+                          <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 md:mt-1 max-w-[100px] md:max-w-xs truncate">
+                            {tx.sale.saleItems.map((item: SaleItem) => `${Number(item.quantidade)}x ${item.product?.nome || 'Produto'}`).join(', ')}
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-gray-500 hidden md:table-cell">{tx.categoria || '-'}</td>
                     <td className="px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-gray-500 hidden md:table-cell">{tx.wallet.nome}</td>
@@ -900,7 +900,19 @@ export const FinanceiroPage: React.FC = () => {
                           onChange={() => handleToggleSelect(pay.id)}
                         />
                       </td>
-                      <td className="px-3 md:px-4 py-2.5 md:py-3 font-medium text-gray-800 text-xs md:text-sm truncate max-w-[100px] md:max-w-none">{pay.descricao}</td>
+                      <td className="px-3 md:px-4 py-2.5 md:py-3 font-medium text-gray-800 text-xs md:text-sm truncate max-w-[100px] md:max-w-none">
+                        <div className="flex items-center gap-1.5">
+                          <span>{pay.descricao}</span>
+                          {(() => {
+                            const m = pay.descricao?.match(/\((\d+)\/(\d+)\)/);
+                            return m ? (
+                              <span className="inline-flex items-center bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                {m[1]}/{m[2]}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                      </td>
                       <td className="px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-gray-500 hidden md:table-cell">{pay.fornecedor || '-'}</td>
                       <td className={`px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm whitespace-nowrap tabular-nums ${vencido ? 'text-rose-600 font-bold' : 'text-gray-600'}`}>
                         {formatDateBR(pay.dataVencimento)}

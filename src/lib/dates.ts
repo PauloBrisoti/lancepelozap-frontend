@@ -40,5 +40,7 @@ export function formatDateBR(iso?: string | null): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDateOnly(iso);
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return dateFormatter.format(d);
+  // Para colunas @db.Date do PostgreSQL, o Date JS usa UTC midnight.
+  // Usar componentes UTC para evitar deslocamento de timezone.
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }

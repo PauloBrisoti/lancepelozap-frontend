@@ -305,7 +305,7 @@ export function RelatoriosPage() {
         if ((r.statusExibicao || r.status) === 'PAGO') return;
         recSheet.addRow({
           cliente: r.customer?.nomeCompleto || '-',
-          venc: format(new Date(r.dataVencimento), 'dd/MM/yyyy'),
+          venc: (() => { const d = new Date(r.dataVencimento); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; })(),
           status: r.statusExibicao || r.status,
           saldo: Number(saldoRestante(r)),
         });

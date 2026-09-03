@@ -1,11 +1,22 @@
 import { format } from 'date-fns';
-import { AlertTriangle, CalendarCheck, DollarSign, Search, User, Wallet, Inbox } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, DollarSign, Search, User, Wallet, Inbox, Pencil, Check, X } from 'lucide-react';
 import { SkeletonTable } from '../components/LoadingSkeleton';
 import { Modal } from '../components/Modal';
 import { formatBRL, formatNome } from '../utils/format';
 import { saldoRestante } from '../utils/financeiro';
 import { useFiado, deriveReceivable } from '../hooks/useFiado';
 import type { Receivable } from '../types/api';
+
+/** Formata Date como dd/MM/yyyy usando UTC (coluna @db.Date armazena sem timezone) */
+function formatDateUTC(date: Date | string): string {
+  const d = new Date(date);
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+}
+
+function toInputDateUTC(date: Date | string): string {
+  const d = new Date(date);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
 
 const FILTERS = [
   { key: 'PENDENTE', label: 'A Vencer' },
@@ -23,6 +34,8 @@ export function FiadoPage() {
     payModal, setPayModal, payValue, setPayValue, payDate, setPayDate, saving,
     renegModal, setRenegModal, renegForm, setRenegForm, renegSaving,
     openPay, openReneg, handlePay, handleRenegotiate,
+    editingDateId, editingDateValue, setEditingDateValue,
+    startEditDate, cancelEditDate, handleUpdateDate,
   } = useFiado();
 
   const totalQuitado = filtered
@@ -152,7 +165,10 @@ export function FiadoPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filtered.map(r => (
-                    <DesktopRow key={r.id} r={r} hoje={hoje} onPay={openPay} onReneg={openReneg} />
+                    <DesktopRow key={r.id} r={r} hoje={hoje} onPay={openPay} onReneg={openReneg}
+                      editingDateId={editingDateId} editingDateValue={editingDateValue}
+                      onSetEditingDateValue={setEditingDateValue} onStartEditDate={startEditDate}
+                      onCancelEditDate={cancelEditDate} onUpdateDate={handleUpdateDate} />
                   ))}
                 </tbody>
               </table>
@@ -161,7 +177,10 @@ export function FiadoPage() {
             {/* Mobile: Cards */}
             <div className="md:hidden divide-y divide-gray-100">
               {filtered.map(r => (
-                <MobileCard key={r.id} r={r} hoje={hoje} onPay={openPay} onReneg={openReneg} />
+                <MobileCard key={r.id} r={r} hoje={hoje} onPay={openPay} onReneg={openReneg}
+                  editingDateId={editingDateId} editingDateValue={editingDateValue}
+                  onSetEditingDateValue={setEditingDateValue} onStartEditDate={startEditDate}
+                  onCancelEditDate={cancelEditDate} onUpdateDate={handleUpdateDate} />
               ))}
             </div>
           </>
@@ -287,9 +306,15 @@ interface RowProps {
   hoje: Date;
   onPay: (r: Receivable) => void;
   onReneg: (r: Receivable) => void;
+  editingDateId: string | null;
+  editingDateValue: string;
+  onSetEditingDateValue: (v: string) => void;
+  onStartEditDate: (r: Receivable) => void;
+  onCancelEditDate: () => void;
+  onUpdateDate: (id: string) => void;
 }
 
-function DesktopRow({ r, hoje, onPay, onReneg }: RowProps) {
+function DesktopRow({ r, hoje, onPay, onReneg, editingDateId, editingDateValue, onSetEditingDateValue, onStartEditDate, onCancelEditDate, onUpdateDate }: RowProps) {
   const { isPago, isParcial, isVencido, saldo, temParcial, diasAtraso } = deriveReceivable(r, hoje);
   return (
     <tr className={`hover:bg-gray-50 transition-colors ${isVencido ? 'bg-red-50/60' : ''}`}>
@@ -307,19 +332,40 @@ function DesktopRow({ r, hoje, onPay, onReneg }: RowProps) {
         </span>
       </td>
       <td className="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">
-        {r.sale?.dataVenda ? format(new Date(r.sale.dataVenda), 'dd/MM/yyyy') : '-'}
+        {r.sale?.dataVenda ? formatDateUTC(r.sale.dataVenda) : '-'}
       </td>
       <td className="px-5 py-3.5 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          <span className={isVencido ? 'text-red-600 font-semibold' : 'text-gray-600'}>
-            {format(new Date(r.dataVencimento), 'dd/MM/yyyy')}
-          </span>
-          {diasAtraso > 0 && (
-            <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">
-              há {diasAtraso} dia{diasAtraso > 1 ? 's' : ''}
+        {editingDateId === r.id ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={editingDateValue}
+              onChange={e => onSetEditingDateValue(e.target.value)}
+              className="px-2 py-1 text-xs border border-brand-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button onClick={() => onUpdateDate(r.id)} className="text-emerald-600 hover:text-emerald-800" title="Salvar">
+              <Check className="w-4 h-4" />
+            </button>
+            <button onClick={onCancelEditDate} className="text-gray-400 hover:text-gray-600" title="Cancelar">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div
+            className={`flex items-center gap-1.5 ${!isPago ? 'cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 -mx-1' : ''}`}
+            onClick={() => !isPago && onStartEditDate(r)}
+          >
+            <span className={isVencido ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+              {formatDateUTC(r.dataVencimento)}
             </span>
-          )}
-        </div>
+            {!isPago && <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            {diasAtraso > 0 && (
+              <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">
+                há {diasAtraso} dia{diasAtraso > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        )}
       </td>
       <td className="px-5 py-3.5 font-semibold text-gray-900 whitespace-nowrap">
         {isPago ? (
@@ -359,7 +405,7 @@ function DesktopRow({ r, hoje, onPay, onReneg }: RowProps) {
   );
 }
 
-function MobileCard({ r, hoje, onPay, onReneg }: RowProps) {
+function MobileCard({ r, hoje, onPay, onReneg, editingDateId, editingDateValue, onSetEditingDateValue, onStartEditDate, onCancelEditDate, onUpdateDate }: RowProps) {
   const { isPago, isParcial, isVencido, saldo, temParcial, diasAtraso } = deriveReceivable(r, hoje);
   return (
     <div className={`p-4 ${isVencido ? 'bg-red-50/60' : ''}`}>
@@ -371,7 +417,26 @@ function MobileCard({ r, hoje, onPay, onReneg }: RowProps) {
           <div className="min-w-0">
             <p className="font-semibold text-gray-900 text-sm truncate">{formatNome(r.customer?.nomeCompleto || 'Cliente')}</p>
             <p className="text-[11px] text-gray-400">
-              {r.numeroParcela}/{r.totalParcelas} · vence {format(new Date(r.dataVencimento), 'dd/MM/yyyy')}
+              {r.numeroParcela}/{r.totalParcelas} · vence{' '}
+              {editingDateId === r.id ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    type="date"
+                    value={editingDateValue}
+                    onChange={e => onSetEditingDateValue(e.target.value)}
+                    className="px-1 py-0.5 text-[11px] border border-brand-300 rounded focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                  <button onClick={() => onUpdateDate(r.id)} className="text-emerald-600"><Check className="w-3 h-3" /></button>
+                  <button onClick={onCancelEditDate} className="text-gray-400"><X className="w-3 h-3" /></button>
+                </span>
+              ) : (
+                <span
+                  className={!isPago ? 'cursor-pointer underline decoration-dotted underline-offset-2' : ''}
+                  onClick={() => !isPago && onStartEditDate(r)}
+                >
+                  {formatDateUTC(r.dataVencimento)}
+                </span>
+              )}
               {diasAtraso > 0 && <span className="text-red-500 font-bold ml-1">({diasAtraso}d atraso)</span>}
             </p>
           </div>

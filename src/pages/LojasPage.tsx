@@ -266,8 +266,6 @@ export function LojasPage() {
     { key: 'agenda', label: 'Agenda' },
     { key: 'orcamentos', label: 'Orçamentos' },
     { key: 'devolucoes', label: 'Devoluções' },
-    { key: 'whatsapp', label: 'WhatsApp' },
-    { key: 'campanhas', label: 'Campanhas' },
     { key: 'crediario', label: 'Crediário / Fiado' },
     { key: 'relatorios', label: 'Relatórios' },
     { key: 'insights', label: 'Insights & IA' },

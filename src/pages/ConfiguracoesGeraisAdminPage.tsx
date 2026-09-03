@@ -22,7 +22,7 @@ export function ConfiguracoesGeraisAdminPage() {
   const [smtpConfig, setSmtpConfig] = useState({ host: 'smtp.hostinger.com', port: 465, user: 'contato@lancepelozap.com.br', password: '', fromEmail: 'contato@lancepelozap.com.br' });
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
-  const [gateways, setGateways] = useState({ mercadoPagoPublicKey: '', mercadoPagoAccessToken: '', whatsappApiUrl: '', whatsappApiToken: '' });
+  const [gateways, setGateways] = useState({ mercadoPagoPublicKey: '', mercadoPagoAccessToken: '' });
 
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [backingUp, setBackingUp] = useState(false);
@@ -293,12 +293,7 @@ export function ConfiguracoesGeraisAdminPage() {
                   <div><label className="block text-sm font-medium mb-1">Public Key</label><input type="text" value={gateways.mercadoPagoPublicKey} onChange={e => setGateways({...gateways, mercadoPagoPublicKey: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500" /></div>
                 </div>
               </div>
-              <div><h3 className="text-lg font-semibold mb-3">WhatsApp API</h3>
-                <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                  <div><label className="block text-sm font-medium mb-1">URL da API</label><input type="text" value={gateways.whatsappApiUrl} onChange={e => setGateways({...gateways, whatsappApiUrl: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500" /></div>
-                  <div><label className="block text-sm font-medium mb-1">Token Global</label><input type="password" value={gateways.whatsappApiToken} onChange={e => setGateways({...gateways, whatsappApiToken: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500" /></div>
-                </div>
-              </div>
+
             </div>
           )}
 

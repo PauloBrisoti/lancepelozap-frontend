@@ -4,7 +4,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../context/AuthContext';
 import { fetchApi } from '../lib/api';
 import { STALE_TIMES, useCustomers, usePaymentFees } from '../lib/query';
-import { todayLocalDate, formatBRL } from '../utils/format';
+import { formatBRL } from '../utils/format';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useSaleDraft, type SaleDraft, type SaleDraftField } from '../hooks/useSaleDraft';
@@ -293,11 +293,7 @@ export const PDVPage: React.FC = () => {
 
     setSaving(true);
     try {
-      const agora = new Date();
-      const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-      const dataVendaEnvio = venda.dataVenda === todayLocalDate()
-        ? `${venda.dataVenda}T${horaAtual}`
-        : venda.dataVenda;
+      const dataVendaEnvio = `${venda.dataVenda}T${venda.horaVenda}`;
 
       const body = {
         customerId: venda.clienteId || undefined,
@@ -650,27 +646,13 @@ export const PDVPage: React.FC = () => {
 
               {vendaFinalizada.clienteTelefone && (
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     const fone = vendaFinalizada.clienteTelefone.replace(/\D/g, '');
-                    try {
-                      await fetchApi('/whatsapp/send-receipt', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          phone: fone,
-                          customerName: vendaFinalizada.clienteNome,
-                          items: vendaFinalizada.itens,
-                          total: vendaFinalizada.total,
-                          paymentMethod: vendaFinalizada.formaPagamento,
-                        }),
-                      });
-                      toast.success('Comprovante enviado!');
-                    } catch {
-                      const itensMsg = vendaFinalizada.itens.map(i => `  • ${i.quantidade}x ${i.nome} — ${formatBRL(i.precoUnitarioVendido * i.quantidade)}`).join('\n');
-                      const msg = encodeURIComponent(
-                        `🧾 *Comprovante de Venda*\n*Lance Pelo Zap*\n\nCliente: ${vendaFinalizada.clienteNome}\n\nItens:\n${itensMsg}\n\n💰 *Total: ${formatBRL(vendaFinalizada.total)}*\n💳 Pagamento: ${vendaFinalizada.formaPagamento}\n\nObrigado pela preferência! 🤝`
-                      );
-                      window.open(`https://wa.me/55${fone}?text=${msg}`, '_blank');
-                    }
+                    const itensMsg = vendaFinalizada.itens.map(i => `  • ${i.quantidade}x ${i.nome} — ${formatBRL(i.precoUnitarioVendido * i.quantidade)}`).join('\n');
+                    const msg = encodeURIComponent(
+                      `🧾 *Comprovante de Venda*\n*Lance Pelo Zap*\n\nCliente: ${vendaFinalizada.clienteNome}\n\nItens:\n${itensMsg}\n\n💰 *Total: ${formatBRL(vendaFinalizada.total)}*\n💳 Pagamento: ${vendaFinalizada.formaPagamento}\n\nObrigado pela preferência! 🤝`
+                    );
+                    window.open(`https://wa.me/55${fone}?text=${msg}`, '_blank');
                   }}
                   className="w-full bg-green-500 text-white py-4 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
                 >
@@ -759,9 +741,13 @@ function CartContent({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Data da Venda</label>
-          <input type="date" value={venda.dataVenda} onChange={e => setVendaField('dataVenda', e.target.value)}
-            className="w-full px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" />
+          <label className="block text-xs font-medium text-gray-500 mb-1">Data e Hora da Venda</label>
+          <div className="flex gap-2">
+            <input type="date" value={venda.dataVenda} onChange={e => setVendaField('dataVenda', e.target.value)}
+              className="flex-1 px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" />
+            <input type="time" value={venda.horaVenda} onChange={e => setVendaField('horaVenda', e.target.value)}
+              className="w-28 px-3 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm" />
+          </div>
         </div>
         
         <div className="flex gap-2">

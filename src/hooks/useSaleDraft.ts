@@ -15,6 +15,7 @@ export interface SaleDraft {
   sinal: number;
   parcelas: number;
   dataVenda: string;
+  horaVenda: string;
   repasseTaxa: boolean;
 }
 
@@ -23,6 +24,11 @@ export type SaleDraftField = keyof SaleDraft;
 type SaleDraftAction =
   | { type: 'SET_FIELD'; field: SaleDraftField; value: string | number | boolean }
   | { type: 'RESET' };
+
+function currentTime(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
 
 export function emptyDraft(): SaleDraft {
   return {
@@ -33,6 +39,7 @@ export function emptyDraft(): SaleDraft {
     sinal: 0,
     parcelas: 1,
     dataVenda: todayLocalDate(),
+    horaVenda: currentTime(),
     repasseTaxa: false,
   };
 }

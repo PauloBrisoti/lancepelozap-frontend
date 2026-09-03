@@ -57,6 +57,8 @@ export function useFiado() {
   const [renegModal, setRenegModal] = useState<Receivable | null>(null);
   const [renegForm, setRenegForm] = useState<RenegForm>({ novaDataVencimento: '', novoValor: '', novasParcelas: '1' });
   const [renegSaving, setRenegSaving] = useState(false);
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [editingDateValue, setEditingDateValue] = useState('');
 
   const { data: receivablesData, isLoading, refetch } = useApiQuery<Receivable[]>(
     queryKeys.receivables(activeStoreId),
@@ -155,6 +157,32 @@ export function useFiado() {
     }
   };
 
+  const startEditDate = (r: Receivable) => {
+    setEditingDateId(r.id);
+    const d = new Date(r.dataVencimento);
+    setEditingDateValue(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+  };
+
+  const cancelEditDate = () => {
+    setEditingDateId(null);
+    setEditingDateValue('');
+  };
+
+  const handleUpdateDate = async (id: string) => {
+    if (!editingDateValue) return;
+    try {
+      await fetchApi(`/finance/receivables/${id}/date`, {
+        method: 'PATCH',
+        body: JSON.stringify({ dataVencimento: editingDateValue }),
+      });
+      toast.success('Data de vencimento atualizada!');
+      setEditingDateId(null);
+      refetch();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar data');
+    }
+  };
+
   return {
     receivables,
     isLoading,
@@ -187,5 +215,11 @@ export function useFiado() {
     openReneg,
     handlePay,
     handleRenegotiate,
+    editingDateId,
+    editingDateValue,
+    setEditingDateValue,
+    startEditDate,
+    cancelEditDate,
+    handleUpdateDate,
   };
 }

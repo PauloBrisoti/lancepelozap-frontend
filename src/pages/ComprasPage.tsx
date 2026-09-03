@@ -124,8 +124,16 @@ export function ComprasPage() {
         observacoes: data.observacoes || '',
         dataCompra: data.dataPedido ? format(new Date(data.dataPedido), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
         dataPrevisao: data.dataPrevisao ? format(new Date(data.dataPrevisao), 'yyyy-MM-dd') : '',
-        formaPagamento: 'A_VISTA', numeroParcelas: 3, primeiroVencimento: '',
-        valorEntrada: '', walletIdEntrada: '', creditCardId: '',
+        formaPagamento: data.formaPagamento || 'A_VISTA',
+        numeroParcelas: data.numeroParcelas || 3,
+        primeiroVencimento: (() => {
+          const aps = (data.accountsPayable || []) as { numeroParcela: number; dataVencimento: string; status: string }[];
+          const first = aps.find((a) => a.numeroParcela === 1 && a.status !== 'CANCELADO');
+          return first?.dataVencimento ? format(new Date(first.dataVencimento), 'yyyy-MM-dd') : '';
+        })(),
+        valorEntrada: data.valorEntrada ? String(Number(data.valorEntrada)) : '',
+        walletIdEntrada: data.walletIdEntrada || '',
+        creditCardId: data.creditCardId || '',
       });
       void productsQ.refetch();
       void suppliersQ.refetch();
@@ -175,7 +183,7 @@ export function ComprasPage() {
   };
 
   const calcTotal = () => {
-    return formOrder.items.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0) - formOrder.desconto;
+    return formOrder.items.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0) - formOrder.desconto + (formOrder.frete ? Number(formOrder.frete) : 0);
   };
 
   const handlePayInvoice = async () => {
@@ -538,8 +546,7 @@ export function ComprasPage() {
               </div>
             </div>
 
-            {!editingOrder && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Condições de Pagamento</p>
                 <div className="flex gap-2 mb-3 flex-wrap">
                   <button
@@ -635,7 +642,6 @@ export function ComprasPage() {
                   </div>
                 )}
               </div>
-            )}
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
