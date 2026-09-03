@@ -177,6 +177,8 @@ export function LojasPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [hideDemo, setHideDemo] = useState(false);
   const [logsModalStore, setLogsModalStore] = useState<{ storeId: string; storeName: string } | null>(null);
+  const [editingNichoStoreId, setEditingNichoStoreId] = useState<string | null>(null);
+  const [editingNichoValue, setEditingNichoValue] = useState('');
   const [impersonationLogs, setImpersonationLogs] = useState<ImpersonationLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -309,6 +311,26 @@ export function LojasPage() {
       toast.error('Erro ao carregar clientes e lojas');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const salvarNicho = async (storeId: string, nicho: string) => {
+    try {
+      await fetchApi(`/super-admin/stores/${storeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ nichoPrincipal: nicho || null }),
+      });
+      setClients(prev => prev.map(c => ({
+        ...c,
+        controls: c.controls?.map(ctrl => ({
+          ...ctrl,
+          stores: ctrl.stores.map(s => s.id === storeId ? { ...s, nichoPrincipal: nicho || null } : s)
+        }))
+      })));
+      setEditingNichoStoreId(null);
+      toast.success('Nicho atualizado');
+    } catch {
+      toast.error('Erro ao atualizar nicho');
     }
   };
 
@@ -659,7 +681,33 @@ export function LojasPage() {
                         {control.stores.map((store: Store) => (
                           <li key={store.id} className="flex flex-col border p-2 rounded bg-gray-50">
                             <span className="font-medium text-gray-800">{store.nomeFantasia}</span>
-                            <span className="text-xs text-gray-500">Nicho: {store.nichoPrincipal || '-'} | Status: {store.status}</span>
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              Nicho:{' '}
+                              {editingNichoStoreId === store.id ? (
+                                <select
+                                  className="border border-gray-300 rounded px-1 py-0.5 text-xs bg-white"
+                                  value={editingNichoValue}
+                                  onChange={e => setEditingNichoValue(e.target.value)}
+                                  onBlur={() => salvarNicho(store.id, editingNichoValue)}
+                                  onKeyDown={e => { if (e.key === 'Enter') salvarNicho(store.id, editingNichoValue); if (e.key === 'Escape') setEditingNichoStoreId(null); }}
+                                  autoFocus
+                                >
+                                  <option value="">Selecione...</option>
+                                  {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => { setEditingNichoStoreId(store.id); setEditingNichoValue(store.nichoPrincipal || ''); }}
+                                    className="hover:text-brand-600 underline cursor-pointer"
+                                    title="Editar nicho"
+                                  >
+                                    {store.nichoPrincipal || '-'}
+                                  </button>
+                                </>
+                              )}
+                              {' '}| Status: {store.status}
+                            </span>
                             <div className="mt-2 flex gap-2">
                               {!c.deletedAt && (
                                 <button 
