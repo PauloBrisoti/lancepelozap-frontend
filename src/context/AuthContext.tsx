@@ -182,8 +182,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // PERFORMANCE: só atualiza o estado se o usuário REALMENTE mudou — sem isso,
   // a cada 60s o app inteiro re-renderizava sem necessidade.
   useEffect(() => {
+    let retryAfter = 0;
     const refresh = async () => {
       if (document.visibilityState === 'hidden') return;
+      if (Date.now() < retryAfter) return;
       try {
         const data = await fetchApi('/auth/me');
         if (data.user) {
@@ -192,7 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return data.user;
           });
         }
-      } catch { /* sessão indisponível — ignora */ }
+      } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 429) {
+          retryAfter = Date.now() + 60_000;
+        }
+      }
     };
     const onVisible = () => { if (document.visibilityState === 'visible' && userRef.current) refresh(); };
     document.addEventListener('visibilitychange', onVisible);

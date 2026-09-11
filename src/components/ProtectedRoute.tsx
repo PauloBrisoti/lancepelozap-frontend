@@ -24,10 +24,16 @@ export function ProtectedRoute({ children }: Props) {
   } else if (loadingSub) {
     subscriptionBlocked = null;
   } else {
-    const data = (error as ApiError | null)?.data;
-    const expired = !!error && typeof data === 'object' && data !== null &&
-      (data as { code?: string }).code === 'SUBSCRIPTION_EXPIRED';
-    subscriptionBlocked = expired || isSubscriptionBlocked(sub?.statusPagamento);
+    const apiErr = error as ApiError | null;
+    const is429 = apiErr?.status === 429;
+    if (is429) {
+      subscriptionBlocked = false;
+    } else {
+      const data = apiErr?.data;
+      const expired = !!error && typeof data === 'object' && data !== null &&
+        (data as { code?: string }).code === 'SUBSCRIPTION_EXPIRED';
+      subscriptionBlocked = expired || isSubscriptionBlocked(sub?.statusPagamento);
+    }
   }
 
   if (loading || subscriptionBlocked === null) {
