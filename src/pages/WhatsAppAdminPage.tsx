@@ -47,15 +47,11 @@ export function WhatsAppAdminPage() {
   );
 
   const handleCreate = async () => {
-    if (!selectedStore) {
-      toast.error('Selecione uma loja');
-      return;
-    }
     try {
       setCreating(true);
       const resp = await fetchApi<{ id: string; qrCode: string }>(
         '/super-admin/whatsapp-sessions',
-        { method: 'POST', body: JSON.stringify({ storeId: selectedStore }) }
+        { method: 'POST', body: JSON.stringify({ storeId: selectedStore || undefined }) }
       );
       if (resp.qrCode) {
         setQrCode(resp.qrCode);
@@ -159,7 +155,15 @@ export function WhatsAppAdminPage() {
             <tbody className="divide-y divide-gray-100">
               {sessions.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm text-gray-700">{s.store?.nomeFantasia || s.storeId}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {s.storeId === null ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                        Super Admin
+                      </span>
+                    ) : (
+                      s.store?.nomeFantasia || s.storeId
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.instanceName}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{s.phone || '-'}</td>
                   <td className="px-4 py-3">
@@ -199,13 +203,13 @@ export function WhatsAppAdminPage() {
       <Modal open={createModal.open} onClose={createModal.closeModal} closeDisabled={creating} title="Nova Sessão WhatsApp" size="md">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Loja *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Vincular a</label>
             <select
               value={selectedStore}
               onChange={e => setSelectedStore(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">Selecione uma loja...</option>
+              <option value="">Super Admin (pessoal)</option>
               {stores.map(s => (
                 <option key={s.id} value={s.id}>{s.nomeFantasia}</option>
               ))}
@@ -221,7 +225,7 @@ export function WhatsAppAdminPage() {
             </button>
             <button
               onClick={handleCreate}
-              disabled={creating || !selectedStore}
+              disabled={creating}
               className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50"
             >
               {creating ? 'Criando...' : 'Criar Sessão'}
@@ -234,7 +238,7 @@ export function WhatsAppAdminPage() {
       <Modal open={qrModal.open} onClose={() => { qrModal.closeModal(); setPollingId(null); }} title="Escaneie o QR Code" size="sm">
         <div className="flex flex-col items-center gap-4">
           <p className="text-sm text-gray-600 text-center">
-            Abra o WhatsApp no celular da loja, vá em <strong>Aparelhos conectados</strong> e escaneie.
+            Abra o WhatsApp no celular, vá em <strong>Aparelhos conectados</strong> e escaneie.
           </p>
           {qrCode && (
             <img src={qrCode} alt="QR Code" className="w-64 h-64 border border-gray-200 rounded-lg" />
