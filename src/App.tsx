@@ -61,6 +61,7 @@ const PixProofsAdminPage = lazy(() => import('./pages/PixProofsAdminPage').then(
 const EquipeAdminPage = lazy(() => import('./pages/EquipeAdminPage').then(m => ({ default: m.EquipeAdminPage })));
 const PermissoesAdminPage = lazy(() => import('./pages/PermissoesAdminPage').then(m => ({ default: m.PermissoesAdminPage })));
 const ConfiguracoesGeraisAdminPage = lazy(() => import('./pages/ConfiguracoesGeraisAdminPage').then(m => ({ default: m.ConfiguracoesGeraisAdminPage })));
+const WhatsAppAdminPage = lazy(() => import('./pages/WhatsAppAdminPage').then(m => ({ default: m.WhatsAppAdminPage })));
 const MonitoramentoPage = lazy(() => import('./pages/MonitoramentoPage').then(m => ({ default: m.MonitoramentoPage })));
 const LogsServidorPage = lazy(() => import('./pages/LogsServidorPage').then(m => ({ default: m.LogsServidorPage })));
 
@@ -183,6 +184,7 @@ function AppRoutes() {
             <Route path="equipe/permissoes" element={<PermissoesAdminPage />} />
             <Route path="configuracoes" element={<ConfiguracoesGeraisAdminPage />} />
             <Route path="monitoramento" element={<MonitoramentoPage />} />
+            <Route path="whatsapp" element={<WhatsAppAdminPage />} />
             <Route path="logs" element={<LogsServidorPage />} />
           </Route>
 
