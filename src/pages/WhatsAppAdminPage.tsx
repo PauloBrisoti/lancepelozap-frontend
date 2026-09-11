@@ -29,10 +29,14 @@ const STATUS_COLORS: Record<string, string> = {
 export function WhatsAppAdminPage() {
   const createModal = useModal();
   const qrModal = useModal();
+  const sendModal = useModal();
   const [selectedStore, setSelectedStore] = useState('');
   const [creating, setCreating] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const [pollingId, setPollingId] = useState<string | null>(null);
+  const [sendForm, setSendForm] = useState({ phone: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const [sendSessionId, setSendSessionId] = useState('');
 
   const { data: sessions = [], isLoading, refetch } = useApiQuery<WhatsAppInstance[]>(
     ['admin-whatsapp-sessions'],
@@ -90,6 +94,33 @@ export function WhatsAppAdminPage() {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro');
     }
+  };
+
+  const handleSend = async () => {
+    if (!sendForm.phone.trim() || !sendForm.message.trim()) {
+      toast.error('Preencha telefone e mensagem');
+      return;
+    }
+    try {
+      setSending(true);
+      await fetchApi(`/super-admin/whatsapp-sessions/${sendSessionId}/send`, {
+        method: 'POST',
+        body: JSON.stringify(sendForm),
+      });
+      toast.success('Mensagem enviada!');
+      sendModal.closeModal();
+      setSendForm({ phone: '', message: '' });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const openSendModal = (sessionId: string) => {
+    setSendSessionId(sessionId);
+    setSendForm({ phone: '', message: '' });
+    sendModal.openModal();
   };
 
   const connected = sessions.filter(s => s.status === 'CONNECTED').length;
@@ -176,6 +207,14 @@ export function WhatsAppAdminPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
+                      {s.status === 'CONNECTED' && (
+                        <button
+                          onClick={() => openSendModal(s.id)}
+                          className="px-2 py-1 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium"
+                        >
+                          Enviar
+                        </button>
+                      )}
                       {s.status === 'QR_PENDING' && (
                         <button
                           onClick={() => handleRefreshQR(s.id)}
@@ -252,6 +291,48 @@ export function WhatsAppAdminPage() {
           >
             Fechar
           </button>
+        </div>
+      </Modal>
+
+      {/* Send Message Modal */}
+      <Modal open={sendModal.open} onClose={sendModal.closeModal} closeDisabled={sending} title="Enviar Mensagem WhatsApp" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone *</label>
+            <input
+              value={sendForm.phone}
+              onChange={e => setSendForm(prev => ({ ...prev, phone: e.target.value }))}
+              placeholder="Ex: 11999998888"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">Número com DDD, sem espaços ou traços</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem *</label>
+            <textarea
+              value={sendForm.message}
+              onChange={e => setSendForm(prev => ({ ...prev, message: e.target.value }))}
+              rows={4}
+              placeholder="Digite sua mensagem..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              onClick={sendModal.closeModal}
+              disabled={sending}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={sending || !sendForm.phone.trim() || !sendForm.message.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50"
+            >
+              {sending ? 'Enviando...' : 'Enviar'}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>
