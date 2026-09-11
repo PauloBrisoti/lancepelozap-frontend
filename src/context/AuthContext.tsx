@@ -100,7 +100,10 @@ function setStoreIdCookie(storeId: string | null) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const userRef = useRef<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { userRef.current = user; }, [user]);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(
     getCookie(ACTIVE_STORE_COOKIE) || localStorage.getItem(ACTIVE_STORE_KEY)
   );
@@ -180,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // a cada 60s o app inteiro re-renderizava sem necessidade.
   useEffect(() => {
     const refresh = async () => {
-      if (document.visibilityState === 'hidden') return; // aba oculta: não busca
+      if (document.visibilityState === 'hidden') return;
       try {
         const data = await fetchApi('/auth/me');
         if (data.user) {
@@ -191,9 +194,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch { /* sessão indisponível — ignora */ }
     };
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible' && userRef.current) refresh(); };
     document.addEventListener('visibilitychange', onVisible);
-    const id = setInterval(refresh, 60_000);
+    const id = setInterval(() => {
+      if (!userRef.current) return;
+      refresh();
+    }, 60_000);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(id);
