@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { useApiQuery } from '../lib/query';
+import { useModal } from '../hooks/useModal';
+import { Modal } from '../components/Modal';
 
 interface WhatsAppInstance {
   id: string;
@@ -12,6 +15,11 @@ interface WhatsAppInstance {
   store?: { nomeFantasia: string };
 }
 
+interface Store {
+  id: string;
+  nomeFantasia: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   QR_PENDING: 'bg-yellow-100 text-yellow-700',
   CONNECTED: 'bg-green-100 text-green-700',
@@ -19,11 +27,63 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function WhatsAppAdminPage() {
+  const createModal = useModal();
+  const qrModal = useModal();
+  const [selectedStore, setSelectedStore] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [pollingId, setPollingId] = useState<string | null>(null);
+
   const { data: sessions = [], isLoading, refetch } = useApiQuery<WhatsAppInstance[]>(
     ['admin-whatsapp-sessions'],
     '/super-admin/whatsapp-sessions',
     { staleTime: 15_000 }
   );
+
+  const { data: stores = [] } = useApiQuery<Store[]>(
+    ['admin-stores'],
+    '/super-admin/stores',
+    { staleTime: 60_000 }
+  );
+
+  const handleCreate = async () => {
+    if (!selectedStore) {
+      toast.error('Selecione uma loja');
+      return;
+    }
+    try {
+      setCreating(true);
+      const resp = await fetchApi<{ id: string; qrCode: string }>(
+        '/super-admin/whatsapp-sessions',
+        { method: 'POST', body: JSON.stringify({ storeId: selectedStore }) }
+      );
+      if (resp.qrCode) {
+        setQrCode(resp.qrCode);
+        setPollingId(resp.id);
+        createModal.closeModal();
+        qrModal.openModal();
+        toast.success('Sessão criada! Escaneie o QR Code.');
+      }
+      await refetch();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar sessão');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRefreshQR = async (id: string) => {
+    try {
+      const resp = await fetchApi<{ qrCode: string }>(`/super-admin/whatsapp-sessions/${id}/qr`);
+      if (resp.qrCode) {
+        setQrCode(resp.qrCode);
+        setPollingId(id);
+        qrModal.openModal();
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao obter QR');
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Remover esta sessão permanentemente?')) return;
@@ -41,8 +101,18 @@ export function WhatsAppAdminPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">WhatsApp — Painel Admin</h1>
-      <p className="text-sm text-gray-500 mb-6">Visão global de todas as sessões WhatsApp do sistema</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">WhatsApp — Painel Admin</h1>
+          <p className="text-sm text-gray-500 mt-1">Visão global de todas as sessões WhatsApp do sistema</p>
+        </div>
+        <button
+          onClick={createModal.openModal}
+          className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 font-medium transition-colors"
+        >
+          + Nova Sessão
+        </button>
+      </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
@@ -62,7 +132,17 @@ export function WhatsAppAdminPage() {
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Carregando...</div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">Nenhuma sessão WhatsApp registrada</div>
+        <div className="text-center py-16">
+          <div className="text-6xl mb-4">📱</div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma sessão WhatsApp</h3>
+          <p className="text-gray-500 mb-6">Crie uma sessão para conectar o WhatsApp de uma loja.</p>
+          <button
+            onClick={createModal.openModal}
+            className="bg-brand-600 text-white px-6 py-3 rounded-lg hover:bg-brand-700 font-medium transition-colors"
+          >
+            Conectar WhatsApp
+          </button>
+        </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table className="w-full">
@@ -91,12 +171,22 @@ export function WhatsAppAdminPage() {
                     {new Date(s.createdAt).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(s.id)}
-                      className="px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-medium"
-                    >
-                      Remover
-                    </button>
+                    <div className="flex justify-end gap-1">
+                      {s.status === 'QR_PENDING' && (
+                        <button
+                          onClick={() => handleRefreshQR(s.id)}
+                          className="px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-xs font-medium"
+                        >
+                          Ver QR
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(s.id)}
+                        className="px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -104,6 +194,62 @@ export function WhatsAppAdminPage() {
           </table>
         </div>
       )}
+
+      {/* Create Session Modal */}
+      <Modal open={createModal.open} onClose={createModal.closeModal} closeDisabled={creating} title="Nova Sessão WhatsApp" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Loja *</label>
+            <select
+              value={selectedStore}
+              onChange={e => setSelectedStore(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="">Selecione uma loja...</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>{s.nomeFantasia}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              onClick={createModal.closeModal}
+              disabled={creating}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={creating || !selectedStore}
+              className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50"
+            >
+              {creating ? 'Criando...' : 'Criar Sessão'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* QR Code Modal */}
+      <Modal open={qrModal.open} onClose={() => { qrModal.closeModal(); setPollingId(null); }} title="Escaneie o QR Code" size="sm">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-gray-600 text-center">
+            Abra o WhatsApp no celular da loja, vá em <strong>Aparelhos conectados</strong> e escaneie.
+          </p>
+          {qrCode && (
+            <img src={qrCode} alt="QR Code" className="w-64 h-64 border border-gray-200 rounded-lg" />
+          )}
+          {pollingId && (
+            <p className="text-sm text-amber-600 animate-pulse">Aguardando leitura do QR Code...</p>
+          )}
+          <button
+            onClick={() => { qrModal.closeModal(); setPollingId(null); }}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+          >
+            Fechar
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
