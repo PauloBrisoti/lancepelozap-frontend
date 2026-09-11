@@ -44,6 +44,7 @@ const LegacyImportPage = lazy(() => import('./pages/LegacyImportPage').then(m =>
 const PlanilhaImportPage = lazy(() => import('./pages/PlanilhaImportPage').then(m => ({ default: m.PlanilhaImportPage })));
 const FiadoPage = lazy(() => import('./pages/FiadoPage').then(m => ({ default: m.FiadoPage })));
 const PersonalDashboardPage = lazy(() => import('./pages/PersonalDashboardPage').then(m => ({ default: m.PersonalDashboardPage })));
+const WhatsAppPage = lazy(() => import('./pages/WhatsAppPage').then(m => ({ default: m.WhatsAppPage })));
 const ChamadosLojistaPage = lazy(() => import('./pages/ChamadosLojistaPage').then(m => ({ default: m.ChamadosLojistaPage })));
 const ConfigCardMachinePage = lazy(() => import('./pages/ConfigCardMachinePage'));
 const LojasPage = lazy(() => import('./pages/LojasPage').then(m => ({ default: m.LojasPage })));
@@ -144,6 +145,7 @@ function AppRoutes() {
             <Route path="operacional-pet" element={<OperacionalPetPage />} />
             <Route path="compras" element={<FeatureGuard><ComprasPage /></FeatureGuard>} />
             <Route path="fornecedores" element={<FeatureGuard><FornecedoresPage /></FeatureGuard>} />
+            <Route path="whatsapp" element={<StoreRoleGuard><WhatsAppPage /></StoreRoleGuard>} />
             <Route path="comissoes" element={<FeatureGuard><ComissoesPage /></FeatureGuard>} />
             <Route path="devolucoes" element={<FeatureGuard><DevolucoesPage /></FeatureGuard>} />
             <Route path="insights" element={<StoreRoleGuard><InsightsPage /></StoreRoleGuard>} />

@@ -19,7 +19,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   { title: 'Gestão & Relatórios', paths: ['/app/dashboard-pj', '/app/relatorios', '/app/insights', '/app/comissoes'] },
   { title: 'Operacional', paths: ['/app/caixa', '/app/os', '/app/agenda', '/app/orcamentos', '/app/operacional-pet', '/app/devolucoes'] },
   { title: 'Estoque & Suprimentos', paths: ['/app/estoque', '/app/transferencias', '/app/inventario', '/app/compras', '/app/fornecedores'] },
-  { title: 'Comunicação', paths: ['/app/chamados'] },
+  { title: 'Comunicação', paths: ['/app/chamados', '/app/whatsapp'] },
   { title: 'Configurações e Suporte', paths: ['/app/planos', '/app/configuracoes', '/app/importacao-legada', '/app/importar-planilha'] },
 ];
 
