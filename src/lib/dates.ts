@@ -13,13 +13,6 @@ const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   hour12: false
 });
 
-const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: TZ_BR,
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric'
-});
-
 /** "2026-08-03" → "03/08/2026" (sem conversão de fuso, valor é só data) */
 function formatDateOnly(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);

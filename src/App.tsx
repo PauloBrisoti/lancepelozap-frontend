@@ -12,6 +12,7 @@ const VerificarEmailPage = lazy(() => import('./pages/VerificarEmailPage').then(
 const TwoFactorSetupPage = lazy(() => import('./pages/TwoFactorSetupPage').then(m => ({ default: m.TwoFactorSetupPage })));
 const CompletarCadastroPage = lazy(() => import('./pages/CompletarCadastroPage').then(m => ({ default: m.CompletarCadastroPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
+const ConvitePage = lazy(() => import('./pages/ConvitePage').then(m => ({ default: m.ConvitePage })));
 const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const CatalogoPublicoPage = lazy(() => import('./pages/CatalogoPublicoPage').then(m => ({ default: m.CatalogoPublicoPage })));
@@ -36,6 +37,7 @@ const EstoquePage = lazy(() => import('./pages/EstoquePage').then(m => ({ defaul
 const TransferenciasPage = lazy(() => import('./pages/TransferenciasPage').then(m => ({ default: m.TransferenciasPage })));
 const InventarioPage = lazy(() => import('./pages/InventarioPage').then(m => ({ default: m.InventarioPage })));
 const FinanceiroPage = lazy(() => import('./pages/FinanceiroPage').then(m => ({ default: m.FinanceiroPage })));
+const ConciliacaoBancariaPage = lazy(() => import('./pages/ConciliacaoBancariaPage').then(m => ({ default: m.ConciliacaoBancariaPage })));
 const FinanceiroPF = lazy(() => import('./pages/FinanceiroPF').then(m => ({ default: m.FinanceiroPF })));
 const ClientesPage = lazy(() => import('./pages/ClientesPage').then(m => ({ default: m.ClientesPage })));
 const PlanosPage = lazy(() => import('./pages/PlanosPage').then(m => ({ default: m.PlanosPage })));
@@ -128,6 +130,7 @@ function AppRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verificar-email" element={<VerificarEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/convite" element={<ConvitePage />} />
           <Route path="/cadastro" element={<RegisterPage />} />
           <Route path="/catalogo/:tenantId" element={<CatalogoPublicoPage />} />
           <Route path="/portal/:token" element={<PortalPage />} />
@@ -156,6 +159,10 @@ function AppRoutes() {
             <Route path="transferencias" element={<FeatureGuard><TransferenciasPage /></FeatureGuard>} />
             <Route path="inventario" element={<FeatureGuard><InventarioPage /></FeatureGuard>} />
             <Route path="financeiro" element={<StoreRoleGuard><AppFinanceiro /></StoreRoleGuard>} />
+            <Route
+              path="financeiro/conciliacao"
+              element={<StoreRoleGuard><FeatureGuard><ConciliacaoBancariaPage /></FeatureGuard></StoreRoleGuard>}
+            />
             <Route path="clientes" element={<FeatureGuard><ClientesPage /></FeatureGuard>} />
             <Route path="planos" element={<StoreRoleGuard><PlanosPage /></StoreRoleGuard>} />
             <Route path="configuracoes" element={<StoreRoleGuard><ConfiguracoesPage /></StoreRoleGuard>} />

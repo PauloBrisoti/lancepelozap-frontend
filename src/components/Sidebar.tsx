@@ -8,7 +8,7 @@ import { AnnouncementsBanner } from './AnnouncementsBanner';
 import { PendingCountBadge } from './PendingCountBadge';
 import { TicketBadge } from './TicketBadge';
 import { isPathActive, activeSection } from '../utils/navigation';
-import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPackage, IconFinance, IconShoppingBag } from './icons';
+import { IconHome, IconUsers, IconSettings, IconImport, IconCreditCard, IconPackage, IconFinance, IconShoppingBag, IconLandmark } from './icons';
 
 export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
@@ -25,8 +25,8 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
   const showOperacional = ['caixa', 'ordem_servico', 'agenda', 'orcamentos', 'operacional_pet', 'devolucoes'].some(canAccess);
   const showEstoque = ['catalogo', 'transferencia_estoque', 'inventario', 'compras', 'fornecedores'].some(canAccess);
   const section = activeSection(location.pathname);
-  const getLinkClass = (path: string) => {
-    const isActive = isPathActive(location.pathname, path);
+  const getLinkClass = (path: string, exact = false) => {
+    const isActive = exact ? location.pathname === path : isPathActive(location.pathname, path);
     if (isPf) {
       return `flex items-center px-4 py-3 rounded-lg font-medium transition-colors ${
         isActive ? 'bg-emerald-200 text-emerald-800' : 'text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900'
@@ -90,7 +90,14 @@ export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }: { isOp
                   <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   Crediário / Fiado
                 </Link>}
-                {!isRestrictedRole && (!user?.features || user.features?.financeiro) && <Link to="/app/financeiro" className={getLinkClass('/app/financeiro')}><IconFinance /> Financeiro</Link>}
+                {!isRestrictedRole && (!user?.features || user.features?.financeiro) && (
+                  <>
+                    <Link to="/app/financeiro" className={getLinkClass('/app/financeiro', true)}><IconFinance /> Financeiro</Link>
+                    <Link to="/app/financeiro/conciliacao" className={getLinkClass('/app/financeiro/conciliacao')}>
+                      <IconLandmark /> Conciliação Bancária
+                    </Link>
+                  </>
+                )}
               </>
             )}
 

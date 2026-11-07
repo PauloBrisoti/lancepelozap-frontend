@@ -28,7 +28,6 @@ export function RegisterPage() {
     planId: ''
   });
   const [plans, setPlans] = useState<PlanOption[]>(FALLBACK_PLANS); // Já inicia com os planos garantidos
-  const [plansError, setPlansError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);

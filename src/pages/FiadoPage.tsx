@@ -1,4 +1,3 @@
-import { format } from 'date-fns';
 import { AlertTriangle, CalendarCheck, DollarSign, Search, User, Wallet, Inbox, Pencil, Check, X } from 'lucide-react';
 import { SkeletonTable } from '../components/LoadingSkeleton';
 import { Modal } from '../components/Modal';
@@ -11,11 +10,6 @@ import type { Receivable } from '../types/api';
 function formatDateUTC(date: Date | string): string {
   const d = new Date(date);
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
-}
-
-function toInputDateUTC(date: Date | string): string {
-  const d = new Date(date);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 const FILTERS = [

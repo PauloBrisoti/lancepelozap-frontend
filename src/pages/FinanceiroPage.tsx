@@ -1,7 +1,8 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { fetchApi } from '../lib/api';
-import { TrendingUp, TrendingDown, Banknote, HandCoins, CalendarClock, Receipt, PiggyBank, Scale, Activity, Box, FileMinus, Wallet as WalletIcon, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Banknote, HandCoins, CalendarClock, Receipt, PiggyBank, Scale, Activity, Box, FileMinus, Wallet as WalletIcon, BarChart3, ArrowUpRight, ArrowDownRight, Landmark } from 'lucide-react';
 import { useAuthStore } from '../context/AuthContext';
 import { useDateFilter, type DatePeriod } from '../hooks/useDateFilter';
 import { useFinanceiroModals } from '../hooks/useFinanceiroModals';
@@ -20,6 +21,7 @@ import { CobrancaModal } from '../components/CobrancaModal';
 
 export const FinanceiroPage: React.FC = () => {
   const { activeStoreId } = useAuthStore();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'TRANSACOES' | 'RECEBER' | 'PAGAR' | 'DRE'>('TRANSACOES');
 
   // Date filter state
@@ -289,6 +291,14 @@ export const FinanceiroPage: React.FC = () => {
           <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Acompanhe e detalhe todas as transações, receitas e despesas.</p>
         </div>
         <div className="flex gap-1.5 md:gap-2 shrink-0 ml-2">
+          <button
+            onClick={() => navigate('/app/financeiro/conciliacao')}
+            title="Importar extrato bancário (.csv/.ofx) e conciliar lançamentos"
+            className="flex items-center gap-1.5 md:gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 md:px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-colors"
+          >
+            <Landmark className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="hidden sm:inline">Conciliação</span>
+          </button>
           <button 
             onClick={() => modais.openImport()}
             className="hidden md:flex bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-colors items-center gap-2"

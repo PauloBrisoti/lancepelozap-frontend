@@ -96,57 +96,6 @@ const faqs = [
   }
 ];
 
-const planos = [
-  {
-    categoria: 'PF',
-    cor: 'bg-emerald-50 border-emerald-200',
-    corBotao: 'bg-emerald-600 hover:bg-emerald-700',
-    badge: 'INDIVIDUAL',
-    plans: [
-      {
-        name: 'Finanças Pessoais',
-        desc: 'Controle suas contas, cartões e metas financeiras',
-        price: 'R$29,90',
-        features: ['Controle de gastos pessoais', 'Metas de economia', 'Categorias inteligentes', 'Relatórios mensais', 'Dashboard financeiro PF']
-      }
-    ]
-  },
-  {
-    categoria: 'PJ',
-    cor: 'bg-brand-50 border-brand-200',
-    corBotao: 'bg-brand-600 hover:bg-brand-700',
-    badge: 'MAIS ESCOLHIDO',
-    plans: [
-      {
-        name: 'Vendas + Estoque',
-        desc: 'PDV, catálogo e estoque completo para sua loja',
-        price: 'R$97,00',
-        features: ['PDV profissional com busca rápida', 'Catálogo Digital com link WhatsApp', 'Gestão de Estoque + alertas', 'Emissão de relatórios', 'Clientes e crediário', 'Integração WhatsApp']
-      },
-      {
-        name: 'Financeiro PJ',
-        desc: 'Gestão financeira completa para empresas',
-        price: 'R$147,00',
-        features: ['Tudo do Vendas + Estoque', 'DRE completo (receitas, despesas)', 'Fluxo de caixa diário', 'Contas a pagar/receber', 'Conciliação bancária', 'Múltiplos vendedores']
-      }
-    ]
-  },
-  {
-    categoria: 'EMPRESARIAL',
-    cor: 'bg-purple-50 border-purple-200',
-    corBotao: 'bg-purple-600 hover:bg-purple-700',
-    badge: null,
-    plans: [
-      {
-        name: 'Rede / Franquia',
-        desc: 'Múltiplas lojas com dados consolidados',
-        price: 'R$249,00',
-        features: ['Tudo do Financeiro PJ', 'Múltiplas lojas/filiais', 'Dashboard consolidado', 'Relatórios gerenciais', 'Suporte prioritário', 'Gerente de sucesso']
-      }
-    ]
-  }
-];
-
 function StarIcon() {
   return (
     <svg className="w-4 h-4 fill-yellow-400" viewBox="0 0 20 20">

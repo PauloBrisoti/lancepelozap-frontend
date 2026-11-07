@@ -88,13 +88,24 @@ export function EquipeAdminPage() {
     }
   };
 
-  const handleRevoke = async (id: string) => {
-    if (!confirm('Tem certeza que deseja revogar o acesso deste usuário?')) return;
+  const handleToggleAccess = async (id: string, currentAtivo: boolean) => {
+    const action = currentAtivo ? 'revogar' : 'restaurar';
+    if (!confirm(`Tem certeza que deseja ${action} o acesso deste usuário?`)) return;
+    try {
+      await fetchApi(`/super-admin/team/users/${id}/toggle-access`, { method: 'PATCH' });
+      refetchUsers();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : `Erro ao ${action} acesso`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Tem certeza? Esta ação irá excluir permanentemente o usuário.')) return;
     try {
       await fetchApi(`/super-admin/team/users/${id}`, { method: 'DELETE' });
       refetchUsers();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao revogar acesso');
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir usuário');
     }
   };
 
@@ -194,12 +205,21 @@ export function EquipeAdminPage() {
                   </div>
                 </td>
                 <td className="p-4 text-right">
-                  <button
-                    onClick={() => handleRevoke(u.id)}
-                    className="text-red-600 hover:text-red-800 font-medium text-sm"
-                  >
-                    Revogar
-                  </button>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => handleToggleAccess(u.id, u.ativo)}
+                      className={`font-medium text-sm ${u.ativo ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
+                    >
+                      {u.ativo ? 'Revogar' : 'Reativar'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(u.id)}
+                      className="text-gray-400 hover:text-red-600 font-medium text-sm"
+                      title="Excluir permanentemente"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

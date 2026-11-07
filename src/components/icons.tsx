@@ -21,6 +21,7 @@ const HOME_PATH = 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10
 const USERS_PATH = 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z';
 const FINANCE_PATH = 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
 const SHOPPING_BAG_PATH = 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z';
+const LANDMARK_PATH = 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A4.814 4.814 0 0012 9.75c-2.034 0-3.8.616-5.25 1.658V21M3 21h18';
 
 export const IconHome = makeIcon(HOME_PATH, 'w-5 h-5 mr-3');
 export const IconUsers = makeIcon(USERS_PATH, 'w-5 h-5 mr-3');
@@ -33,6 +34,7 @@ export const IconCreditCard = makeIcon('M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-
 export const IconPackage = makeIcon('M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', 'w-5 h-5 mr-3');
 export const IconFinance = makeIcon(FINANCE_PATH, 'w-5 h-5 mr-3');
 export const IconShoppingBag = makeIcon(SHOPPING_BAG_PATH, 'w-5 h-5 mr-3');
+export const IconLandmark = makeIcon(LANDMARK_PATH, 'w-5 h-5 mr-3');
 
 export const IconHomeSm = makeIcon(HOME_PATH);
 export const IconShoppingBagSm = makeIcon(SHOPPING_BAG_PATH);

@@ -56,6 +56,8 @@ export const queryKeys = {
   paymentFees: (storeId: string | null) => ['payment-fees', storeId] as const,
   /** Config dos cards do dashboard de uma loja */
   storeDashboardConfig: (storeId: string | null) => ['store-dashboard-config', storeId] as const,
+  /** Carteiras PJ (lista leve para seletores) — Conciliação Bancária */
+  financeWallets: (storeId: string | null) => ['finance-wallets', storeId] as const,
   /** Ordens de serviço de uma loja (sub-opcional para listas derivadas) */
   serviceOrders: (storeId: string | null) => ['service-orders', storeId] as const,
   /** Painel financeiro pessoal (PF) — compartilhada entre FinanceiroPF e PersonalDashboardPage */

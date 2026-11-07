@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchApi } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { useApiQuery } from '../lib/query';
@@ -49,6 +49,23 @@ export function WhatsAppAdminPage() {
     '/super-admin/stores',
     { staleTime: 60_000 }
   );
+
+  const pollStatus = useCallback(async (id: string) => {
+    try {
+      const resp = await fetchApi<{ connected: boolean }>(`/super-admin/whatsapp-sessions/${id}/status`);
+      if (resp.connected) {
+        toast.success('WhatsApp conectado!');
+        setPollingId(null);
+        await refetch();
+      }
+    } catch { /* keep polling */ }
+  }, [refetch]);
+
+  useEffect(() => {
+    if (!pollingId) return;
+    const interval = setInterval(() => pollStatus(pollingId), 3000);
+    return () => clearInterval(interval);
+  }, [pollingId, pollStatus]);
 
   const handleCreate = async () => {
     try {

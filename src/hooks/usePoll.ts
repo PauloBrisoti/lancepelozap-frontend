@@ -28,7 +28,11 @@ export function usePoll(fn: () => void | Promise<void>, intervalMs: number, deps
     const id = window.setInterval(run, intervalMs);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') run(); // voltou: atualiza na hora
+      if (document.visibilityState === 'visible') {
+        // Jitter: quando a aba volta ao foco, todos os usePolls disparam
+        // simultaneamente. Um delay aleatório de 0-500ms evita burst sincronizado.
+        setTimeout(run, Math.random() * 500);
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
 
