@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      testing:
+        patterns:
+          - "@testing-library/*"
+          - "vitest"
+          - "jsdom"
+    ignore:
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
+      # Tailwind v4 exige migração de configuração (tailwind.config.js -> CSS)
+      - dependency-name: "tailwindcss"
+        versions: [">=4.0.0"]
+      # Runtime da VPS é Node 22 — types de versões futuras não se aplicam
+      - dependency-name: "@types/node"
+        versions: [">=25.0.0"]
+      # @testing-library/jest-dom v7 é breaking (API de matchers)
+      - dependency-name: "@testing-library/jest-dom"
+        versions: [">=7.0.0"]
+      # @vitejs/plugin-react 6.0.5+ exige @babel/core 8 — conflita com o babel 7 da árvore
+      - dependency-name: "@vitejs/plugin-react"
+        versions: [">=6.0.5"]
