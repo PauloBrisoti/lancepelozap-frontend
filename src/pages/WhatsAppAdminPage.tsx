@@ -67,20 +67,32 @@ export function WhatsAppAdminPage() {
     return () => clearInterval(interval);
   }, [pollingId, pollStatus]);
 
+  // Polling do QR: a sessão nasce pendente e o connect roda em background
+  useEffect(() => {
+    if (!pollingId || qrCode) return;
+    const fetchQr = async () => {
+      try {
+        const resp = await fetchApi<{ qrCode: string }>(`/super-admin/whatsapp-sessions/${pollingId}/qr`);
+        if (resp.qrCode) setQrCode(resp.qrCode);
+      } catch { /* tenta de novo */ }
+    };
+    void fetchQr();
+    const interval = setInterval(fetchQr, 3000);
+    return () => clearInterval(interval);
+  }, [pollingId, qrCode]);
+
   const handleCreate = async () => {
     try {
       setCreating(true);
-      const resp = await fetchApi<{ id: string; qrCode: string }>(
+      const resp = await fetchApi<{ id: string; qrCode?: string }>(
         '/super-admin/whatsapp-sessions',
         { method: 'POST', body: JSON.stringify({ storeId: selectedStore || undefined }) }
       );
-      if (resp.qrCode) {
-        setQrCode(resp.qrCode);
-        setPollingId(resp.id);
-        createModal.closeModal();
-        qrModal.openModal();
-        toast.success('Sessão criada! Escaneie o QR Code.');
-      }
+      setQrCode(resp.qrCode || '');
+      setPollingId(resp.id);
+      createModal.closeModal();
+      qrModal.openModal();
+      toast.success('Sessão criada! Buscando o QR Code…');
       await refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao criar sessão');
@@ -92,11 +104,9 @@ export function WhatsAppAdminPage() {
   const handleRefreshQR = async (id: string) => {
     try {
       const resp = await fetchApi<{ qrCode: string }>(`/super-admin/whatsapp-sessions/${id}/qr`);
-      if (resp.qrCode) {
-        setQrCode(resp.qrCode);
-        setPollingId(id);
-        qrModal.openModal();
-      }
+      setQrCode(resp.qrCode || '');
+      setPollingId(id);
+      qrModal.openModal();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao obter QR');
     }
