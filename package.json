@@ -20,7 +20,7 @@
     "exceljs": "^4.4.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
+    "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.68.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
