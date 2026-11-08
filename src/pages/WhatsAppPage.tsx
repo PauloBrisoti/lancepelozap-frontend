@@ -109,16 +109,28 @@ export function WhatsAppPage() {
     return () => clearInterval(interval);
   }, [pollingId, pollStatus]);
 
+  // Polling do QR: a sessão nasce pendente e o connect roda em background
+  useEffect(() => {
+    if (!pollingId || qrCode) return;
+    const fetchQr = async () => {
+      try {
+        const resp = await fetchApi<{ qrCode: string }>(`/whatsapp/sessions/${pollingId}/qr`);
+        if (resp.qrCode) setQrCode(resp.qrCode);
+      } catch { /* tenta de novo */ }
+    };
+    void fetchQr();
+    const interval = setInterval(fetchQr, 3000);
+    return () => clearInterval(interval);
+  }, [pollingId, qrCode]);
+
   const handleCreateSession = async () => {
     try {
       setSaving(true);
-      const resp = await fetchApi<{ id: string; qrCode: string }>('/whatsapp/sessions', { method: 'POST', body: JSON.stringify({}) });
-      if (resp.qrCode) {
-        setQrCode(resp.qrCode);
-        setPollingId(resp.id);
-        qrModal.openModal();
-        toast.success('Sessão criada! Escaneie o QR Code.');
-      }
+      const resp = await fetchApi<{ id: string; qrCode?: string }>('/whatsapp/sessions', { method: 'POST', body: JSON.stringify({}) });
+      setQrCode(resp.qrCode || '');
+      setPollingId(resp.id);
+      qrModal.openModal();
+      toast.success('Sessão criada! Buscando o QR Code…');
       await refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao criar sessão';
@@ -129,7 +141,9 @@ export function WhatsAppPage() {
   const handleRefreshQR = async (id: string) => {
     try {
       const resp = await fetchApi<{ qrCode: string }>(`/whatsapp/sessions/${id}/qr`);
-      if (resp.qrCode) { setQrCode(resp.qrCode); setPollingId(id); qrModal.openModal(); }
+      setQrCode(resp.qrCode || '');
+      setPollingId(id);
+      qrModal.openModal();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Erro'); }
   };
 
