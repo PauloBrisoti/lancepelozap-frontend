@@ -14,7 +14,7 @@
     "security:check": "npm audit --audit-level=high && npx tsc --noEmit"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.106.0",
+    "@tanstack/react-query": "^5.106.1",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "exceljs": "^4.4.0",
